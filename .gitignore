@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# logs
+*.log
+
+# env files (NE JAMAIS PUSH)
+.env
+.env.*
+!.env.example
+
+# Node deps
+node_modules/
+
+# Next / build
+.next/
+out/
+dist/
+build/
+
+# caches / coverage
+.cache/
+coverage/
