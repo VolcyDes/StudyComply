@@ -21,3 +21,10 @@ build/
 # caches / coverage
 .cache/
 coverage/
+
+# extra
+**/.DS_Store
+api/dist/
+web/.next/
+web/out/
+web/.cache-tmp/
