@@ -15,6 +15,14 @@ type Country = {
   name: string;   // ex: "France"
 };
 
+
+function normalizeIso2(v: string) {
+  const s = String(v || "").trim();
+  // pick last ISO2-like token (e.g. "Botswana (BW)" -> "BW")
+  const m = s.match(/([A-Za-z]{2})(?!.*[A-Za-z]{2})/);
+  return (m ? m[1] : s).toUpperCase();
+}
+
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -136,7 +144,7 @@ export default function ProfilePage() {
       const res = await authFetch("/api/v1/passports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ countryCode: code }),
+        body: JSON.stringify({ countryCode: normalizeIso2(code) }),
       });
 if (!res.ok) {
         const msg = await res.text();
@@ -153,15 +161,15 @@ if (!res.ok) {
     }
   }
 
-  async function removePassport(id: string) {
+  async function removePassport(countryCode: string) {
     const ok = confirm("Remove this passport?");
     if (!ok) return;
 
     const prev = passports;
-    setPassports((p) => p.filter((x) => x.id !== id));
+    setPassports((p) => p.filter((x) => x.countryCode !== countryCode));
 
     try {
-      const res = await authFetch(`/api/v1/passports/${id}`, { method: "DELETE" });
+      const res = await authFetch(`/api/v1/passports/${normalizeIso2(countryCode)}`, { method: "DELETE" });
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || `Delete failed (${res.status})`);
@@ -199,7 +207,7 @@ if (!res.ok) {
                   <p className="text-xs text-gray-600">{p.countryCode}</p>
                 </div>
                 <button
-                  onClick={() => removePassport(p.id)}
+                  onClick={() => removePassport(p.countryCode)}
                   className="rounded-xl border px-3 py-1.5 text-xs hover:bg-gray-50"
                 >
                   Remove

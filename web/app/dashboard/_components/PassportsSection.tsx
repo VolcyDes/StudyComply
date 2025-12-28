@@ -8,6 +8,14 @@ type Passport = {
   createdAt: string;
 };
 
+
+function normalizeIso2(v: string) {
+  const s = String(v || "").trim();
+  // pick last ISO2-like token (e.g. "Botswana (BW)" -> "BW")
+  const m = s.match(/([A-Za-z]{2})(?!.*[A-Za-z]{2})/);
+  return (m ? m[1] : s).toUpperCase();
+}
+
 function extractPassports(json: any): Passport[] {
   if (Array.isArray(json)) return json as Passport[];
   if (json && Array.isArray(json.passports)) return json.passports as Passport[];
@@ -69,7 +77,7 @@ export default function PassportsSection({
       const res = await authFetch("/api/v1/passports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ countryCode: cc }),
+        body: JSON.stringify({ countryCode: normalizeIso2(cc) }),
       });
 
       if (res.status === 409) {
@@ -101,7 +109,7 @@ export default function PassportsSection({
     setItems((cur) => cur.filter((p) => p.countryCode !== countryCode));
 
     try {
-      const res = await authFetch(`/api/v1/passports/${countryCode}`, { method: "DELETE" });
+      const res = await authFetch(`/api/v1/passports/${normalizeIso2(countryCode)}`, { method: "DELETE" });
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || `Failed (${res.status})`);
