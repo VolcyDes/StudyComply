@@ -26,7 +26,7 @@ export default function ProjectSection({
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
-  const [purpose, setPurpose] = useState("study");
+  const [purpose, setPurpose] = useState("exchange");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -75,7 +75,7 @@ export default function ProjectSection({
     setSaving(true);
     try {
       // MVP: always create a NEW active project (simpler)
-      const res = await authFetch("/api/v1/projects", {
+      const res = await authFetch("/api/v1/projects/active", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,11 +149,11 @@ export default function ProjectSection({
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
           >
-            <option value="study">Study</option>
+            <option value="exchange">Exchange</option>
             <option value="internship">Internship</option>
-            <option value="tourism">Tourism</option>
-            <option value="work">Work</option>
-            <option value="other">Other</option>
+            <option value="degree">Full degree</option>
+            <option value="phd">PhD / Research</option>
+            <option value="language">Language program</option>
           </select>
         </div>
 
