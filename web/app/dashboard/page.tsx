@@ -102,7 +102,7 @@ export default function DashboardPage() {
     const t = localStorage.getItem("token");
     if (!t) {
       router.push("/login");
-      throw new Error("No token");
+      return new Response(null, { status: 401 });
     }
 
     const res = await fetch(`${API_BASE_URL}${path}`, {

@@ -37,7 +37,9 @@ export default function ProjectSection({
     try {
       const res = await authFetch("/api/v1/projects/active");
       if (res.status === 200) {
-        const data = await res.json();
+        const raw = await res.text();
+      let data: any = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
         setActive(data ?? null);
 
         if (data) {

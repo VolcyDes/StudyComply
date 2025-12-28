@@ -25,3 +25,12 @@ downloaded.pdf
 
 # OS
 .DS_Store
+
+# env
+.env
+.env.*
+
+# runtime
+uploads/
+*.sqlite
+*.db
