@@ -19,7 +19,7 @@ import { RequirementsModule } from "./requirements/requirements.module";
     MetaModule,
   , MetaModule, PassportsModule, ProjectsModule, RequirementsModule, PassportsModule].filter(Boolean) as any,
 
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}

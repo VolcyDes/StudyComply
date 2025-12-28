@@ -29,7 +29,9 @@ export default function LoginPage() {
         throw new Error(msg || `Login failed (${res.status})`);
       }
 
-      const data = await res.json();
+      const rawOk = await res.text();
+      let data: any = null;
+      try { data = rawOk ? JSON.parse(rawOk) : null; } catch { data = null; }
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
