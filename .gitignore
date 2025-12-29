@@ -28,3 +28,11 @@ api/dist/
 web/.next/
 web/out/
 web/.cache-tmp/
+
+.DS_Store
+
+# marketing pages generated (ignore)
+web/app/_components/
+web/app/about/
+web/app/client/
+web/app/pricing/

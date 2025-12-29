@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
 
+
+function flagUrl(code: string) {
+  return `/flags/${code.toLowerCase()}.png`;
+}.png`;
+}
+
+
 type Passport = {
   id: string;
   countryCode: string;
@@ -204,7 +211,10 @@ if (!res.ok) {
               <li key={p.id} className="py-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-medium">{countryName(p.countryCode)}</p>
-                  <p className="text-xs text-gray-600">{p.countryCode}</p>
+                  <p className="text-xs text-gray-600"><span className="inline-flex items-center gap-2">
+                    <img src={flagUrl(p.countryCode)} alt={p.countryCode} width={20} height={14} className="rounded-sm" />
+                    <span>{p.countryCode}</span>
+                  </span></p>
                 </div>
                 <button
                   onClick={() => removePassport(p.countryCode)}

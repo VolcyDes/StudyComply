@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+
+function flagUrl(code: string) {
+  return `/flags/${code.toLowerCase()}.png`;
+}.png`;
+}
+
+
 type Passport = {
   id: string;
   countryCode: string;
@@ -188,7 +195,10 @@ export default function PassportsSection({
           {items.map((p) => (
             <li key={p.id} className="flex items-center justify-between py-3">
               <div>
-                <p className="font-medium">{p.countryCode}</p>
+                <p className="font-medium"><span className="inline-flex items-center gap-2">
+                <img src={flagUrl(p.countryCode)} alt={p.countryCode} width={20} height={14} className="rounded-sm" />
+                <span>{p.countryCode}</span>
+              </span></p>
                 <p className="text-xs text-gray-500">
                   Added: {new Date(p.createdAt).toLocaleDateString()}
                 </p>
