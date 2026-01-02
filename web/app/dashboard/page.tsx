@@ -6,6 +6,7 @@ import { API_BASE_URL } from "../../lib/config";
 
 import PassportsSection from "./_components/PassportsSection";
 import ProjectSection from "./_components/ProjectSection";
+import { SchengenRequirementsCard } from "./_components/SchengenRequirementsCard";
 type MeResponse = {
   user: { id: string; email: string; createdAt: string; updatedAt: string };
 };
@@ -391,7 +392,9 @@ export default function DashboardPage() {
       {/* 2) Active Project */}
       <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
 
-      {/* 3) Requirements */}
+      
+      <SchengenRequirementsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} />
+{/* 3) Requirements */}
 {/* Add document */}
       <div className="rounded-2xl border bg-white p-5">
         <h2 className="text-lg font-semibold">Add a document</h2>
