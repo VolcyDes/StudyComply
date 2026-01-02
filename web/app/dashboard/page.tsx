@@ -6,8 +6,6 @@ import { API_BASE_URL } from "../../lib/config";
 
 import PassportsSection from "./_components/PassportsSection";
 import ProjectSection from "./_components/ProjectSection";
-import RequirementsSection from "./_components/RequirementsSection";
-
 type MeResponse = {
   user: { id: string; email: string; createdAt: string; updatedAt: string };
 };
@@ -388,19 +386,13 @@ export default function DashboardPage() {
       </div>
 
       {/* 1) Passports */}
-      <PassportsSection authFetch={authFetch} onChanged={bumpRequirements} />
+      <PassportsSection authFetch={authFetch} onChanged={bumpRequirements} showAddForm={false} />
 
       {/* 2) Active Project */}
       <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
 
       {/* 3) Requirements */}
-      <RequirementsSection
-        authFetch={authFetch}
-        onQuickCreateDocument={quickCreateFromRequirement}
-        refreshKey={requirementsRefreshKey}
-      />
-
-      {/* Add document */}
+{/* Add document */}
       <div className="rounded-2xl border bg-white p-5">
         <h2 className="text-lg font-semibold">Add a document</h2>
         <form onSubmit={createDocument} className="mt-4 grid gap-4">

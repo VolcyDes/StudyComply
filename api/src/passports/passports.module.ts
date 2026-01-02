@@ -3,7 +3,8 @@ import { PassportsController } from './passports.controller';
 import { PassportsService } from './passports.service';
 
 @Module({
-  controllers: [PassportsController],
+controllers: [PassportsController],
   providers: [PassportsService],
+  exports: [PassportsService],
 })
 export class PassportsModule {}

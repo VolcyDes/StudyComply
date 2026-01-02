@@ -23,6 +23,8 @@ export default function ProjectSection({
   onChanged?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
+  const [passports, setPassports] = useState<{ countryCode: string }[]>([]);
+  const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
@@ -35,6 +37,20 @@ export default function ProjectSection({
   async function load() {
     setLoading(true);
     try {
+      // load passports for passport selector
+      try {
+        const rp = await authFetch("/api/v1/passports");
+        if (rp.ok) {
+          const pp = await rp.json();
+          setPassports(pp);
+        }
+      } catch {}
+
+      // restore passport choice
+      try {
+        const v = localStorage.getItem("activePassport") || "BEST";
+        setPassportChoice(v.toString().trim().toUpperCase() || "BEST");
+      } catch {}
       const res = await authFetch("/api/v1/projects/active");
       if (res.status === 200) {
         const raw = await res.text();
@@ -97,6 +113,13 @@ export default function ProjectSection({
       setSaving(false);
     }
   }
+  function onPassportChoice(v: string) {
+    const next = (v || "BEST").toString().trim().toUpperCase();
+    setPassportChoice(next);
+    try { localStorage.setItem("activePassport", next); } catch {}
+    onChanged?.();
+  }
+
 
   return (
     <div className="rounded-2xl border bg-white p-5">
@@ -175,6 +198,20 @@ export default function ProjectSection({
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+        </div>
+
+        <div className="md:col-span-1">
+          <label className="text-sm font-medium">Passport to use</label>
+          <select
+            className="mt-1 w-full rounded-xl border px-3 py-2"
+            value={passportChoice}
+            onChange={(e) => onPassportChoice(e.target.value)}
+          >
+            <option value="BEST">Best choice</option>
+            {passports.map((p) => (
+              <option key={p.countryCode} value={p.countryCode}>{p.countryCode}</option>
+            ))}
+          </select>
         </div>
 
         <div className="md:col-span-4">
