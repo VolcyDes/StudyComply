@@ -7,6 +7,7 @@ import { API_BASE_URL } from "../../lib/config";
 import PassportsSection from "./_components/PassportsSection";
 import ProjectSection from "./_components/ProjectSection";
 import { SchengenRequirementsCard } from "./_components/SchengenRequirementsCard";
+import { NextStepsCard } from "./_components/NextStepsCard";
 type MeResponse = {
   user: { id: string; email: string; createdAt: string; updatedAt: string };
 };
@@ -394,6 +395,8 @@ export default function DashboardPage() {
 
       
       <SchengenRequirementsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} />
+
+      <NextStepsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
 {/* 3) Requirements */}
 {/* Add document */}
       <div className="rounded-2xl border bg-white p-5">

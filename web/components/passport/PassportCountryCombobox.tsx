@@ -48,7 +48,13 @@ export function PassportCountryCombobox({
         <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
           {selected ? (
             <span className="flex items-center gap-2">
-              {selected.flag ? <span>{selected.flag}</span> : null}
+              <img
+                src={flagUrl(selected.code)}
+                alt={selected.code}
+                width={20}
+                height={14}
+                className="rounded-sm"
+              />
               <span>{selected.name}</span>
               <span className="text-muted-foreground">({selected.code})</span>
             </span>

@@ -107,7 +107,11 @@ export default function ProjectSection({
 
       await load();
       onChanged?.();
-    } catch (e: any) {
+          try {
+        localStorage.setItem("activeProjectStartDate", String(startDate));
+        localStorage.setItem("activeProjectEndDate", String(endDate));
+      } catch {}
+} catch (e: any) {
       alert(e?.message ?? "Failed to save project");
     } finally {
       setSaving(false);
