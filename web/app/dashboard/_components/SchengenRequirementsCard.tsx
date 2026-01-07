@@ -1,5 +1,12 @@
 "use client";
 
+import { iso2ToTravelDestination } from "@/lib/travelDestination";
+const SCHENGEN_SET = new Set<string>([
+  "AT","BE","CH","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IS","IT",
+  "LI","LT","LU","LV","MT","NL","NO","PL","PT","SE","SI","SK"
+]);
+
+
 import { useEffect, useState } from "react";
 type EntryResult =
   | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
@@ -38,6 +45,14 @@ function badgeLabel(status: EntryResult["status"]) {
 
 export function SchengenRequirementsCard({ authFetch, refreshKey }: { authFetch: (path: string, init?: RequestInit) => Promise<Response>; refreshKey: number }) {
   const [data, setData] = useState<EntryResult | null>(null);
+
+  const destIso2 = (() => {
+    try {
+      return (localStorage.getItem("activeProjectDestinationIso2") || "").toString().toUpperCase();
+    } catch {
+      return "";
+    }
+  })();
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [passportChoice, setPassportChoice] = useState("BEST");
@@ -54,7 +69,31 @@ export function SchengenRequirementsCard({ authFetch, refreshKey }: { authFetch:
       try {
         setLoading(true);
         setErr(null);
-        const res = await authFetch(`/api/v1/requirements/travel?destination=SCHENGEN&passport=${encodeURIComponent(passportChoice)}`);
+        // Fetch active project to know the selected destination
+        let destinationIso2 = "SCHENGEN";
+        try {
+          const pr = await authFetch("/api/v1/projects/active");
+          if (pr.ok) {
+            const pj: any = await pr.json();
+            destinationIso2 = (pj?.destinationIso2 ?? pj?.destination ?? "SCHENGEN").toString().toUpperCase();
+          }
+        } catch {}
+
+        let destIso2 = "FR";
+
+
+        try {
+
+
+          destIso2 = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
+
+
+        } catch {}
+
+
+        const res = await authFetch(
+          `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
+        );
         if (!res.ok) {
           const txt = await res.text();
           throw new Error(txt || `Failed (${res.status})`);
@@ -72,8 +111,8 @@ export function SchengenRequirementsCard({ authFetch, refreshKey }: { authFetch:
     <div className="rounded-2xl border bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">Schengen requirements</h2>
-          <p className="text-sm text-gray-600">Short stays (up to 90 days).</p>
+          <h2 className="text-lg font-semibold">Travel requirements</h2>
+          <p className="text-sm text-gray-600">Short stays rules for your selected destination.</p>
         </div>
 
         {data ? (

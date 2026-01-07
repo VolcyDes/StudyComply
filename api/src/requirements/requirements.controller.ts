@@ -4,6 +4,7 @@ import { RequirementsService } from './requirements.service';
 import { PassportsService } from "../passports/passports.service";
 import { evaluateEntry } from "./travel/engine";
 import type { DestinationZone } from "./travel/types";
+import { resolveUK, resolveUSA, resolveCANADA } from "src/rules/travel";
 
 @Controller('api/v1/requirements')
 @UseGuards(JwtAuthGuard)

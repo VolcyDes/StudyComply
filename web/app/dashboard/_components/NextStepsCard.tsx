@@ -1,8 +1,14 @@
 "use client";
 
+import { iso2ToTravelDestination } from "@/lib/travelDestination";
+const SCHENGEN_SET = new Set<string>([
+  "AT","BE","CH","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IS","IT",
+  "LI","LT","LU","LV","MT","NL","NO","PL","PT","SE","SI","SK"
+]);
+
+
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-
 type EntryResult =
   | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
   | {
@@ -14,7 +20,14 @@ type EntryResult =
       etiasRequired: boolean;
       message: string;
     }
-  | { destination: "SCHENGEN"; status: "VISA_REQUIRED"; basedOn: string; message: string };
+  | { destination: "SCHENGEN"; status: "VISA_REQUIRED"; basedOn: string; message: string }
+  | {
+      destination: "UK" | "USA" | "CANADA";
+      status: "AUTH_REQUIRED" | "VISA_REQUIRED" | "FREE" | "VISA_FREE";
+      basedOn: string;
+      message: string;
+      meta?: Record<string, any>;
+    };
 
 type NextStep = {
   title: string;
@@ -36,10 +49,44 @@ function pillClass(u: NextStep["urgency"]) {
 }
 
 function computeNextStep(res: EntryResult): NextStep {
+  const auth = (res as any)?.meta?.auth as string | undefined;
+
+  if (auth === "ETA") {
+    return {
+      title: "Apply for a UK ETA",
+      detail: "You must obtain an ETA before travelling to the UK for short visits.",
+      urgency: "HIGH",
+      createDoc: { title: "UK ETA", type: "eta" },
+      ctaLabel: "Create ETA document",
+    };
+  }
+
+  if (auth === "ESTA") {
+    return {
+      title: "Apply for a US ESTA",
+      detail: "For short stays under the Visa Waiver Program, you need an approved ESTA before departure.",
+      urgency: "HIGH",
+      createDoc: { title: "US ESTA", type: "esta" },
+      ctaLabel: "Create ESTA document",
+    };
+  }
+
+  if (auth === "eTA") {
+    return {
+      title: "Apply for a Canada eTA",
+      detail: "To fly to (or transit through) Canada, you need an eTA before travelling.",
+      urgency: "HIGH",
+      createDoc: { title: "Canada eTA", type: "eta" },
+      ctaLabel: "Create eTA document",
+    };
+  }
+
   if (res.status === "FREE") {
     return {
       title: "Nothing urgent",
-      detail: "You have free movement for short stays in Schengen.",
+      detail: res.destination === "SCHENGEN"
+        ? "You have free movement for short stays in Schengen."
+        : "You can travel for short visits without extra authorization.",
       urgency: "LOW",
     };
   }
@@ -47,28 +94,35 @@ function computeNextStep(res: EntryResult): NextStep {
   if (res.status === "VISA_REQUIRED") {
     return {
       title: "Start your visa application",
-      detail: "A Schengen visa is required for your passport. Begin the application process as soon as possible.",
+      detail: "A visa appears to be required for your passport. Begin the application process as soon as possible.",
       urgency: "HIGH",
-      createDoc: { title: "Schengen visa", type: "visa" },
+      createDoc: { title: res.destination === "SCHENGEN" ? "Schengen visa" : "Visa", type: "visa" },
       ctaLabel: "Create visa document",
     };
   }
 
-  // VISA_FREE
-  if (res.etiasRequired) {
+  // SCHENGEN only: VISA_FREE can have ETIAS
+  if ((res as any).destination === "SCHENGEN" && (res as any).status === "VISA_FREE") {
+    if ((res as any).etiasRequired) {
+      return {
+        title: "Apply for ETIAS",
+        detail: "You can travel visa-free for short stays, but ETIAS will be required before travel.",
+        urgency: "MEDIUM",
+        createDoc: { title: "ETIAS", type: "visa" },
+        ctaLabel: "Create ETIAS document",
+      };
+    }
     return {
-      title: "Apply for ETIAS",
-      detail: "You can travel visa-free for short stays, but ETIAS will be required before travel.",
-      urgency: "MEDIUM",
-      createDoc: { title: "ETIAS", type: "visa" },
-      ctaLabel: "Create ETIAS document",
+      title: "No additional authorization needed",
+      detail: "You can travel visa-free for short stays in Schengen.",
+      urgency: "LOW",
     };
   }
 
   return {
-    title: "No additional authorization needed",
-    detail: "You can travel visa-free for short stays in Schengen.",
-    urgency: "LOW",
+    title: "Check requirements",
+    detail: "We couldn’t infer a single next step. Verify your travel requirements.",
+    urgency: "MEDIUM",
   };
 }
 
@@ -99,6 +153,14 @@ export function NextStepsCard({
   onDocumentCreated?: () => void;
 }) {
   const [data, setData] = useState<EntryResult | null>(null);
+
+  const destIso2 = (() => {
+    try {
+      return (localStorage.getItem("activeProjectDestinationIso2") || "").toString().toUpperCase();
+    } catch {
+      return "";
+    }
+  })();
   const [step, setStep] = useState<NextStep | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,8 +189,24 @@ export function NextStepsCard({
             (localStorage.getItem("activePassport") || "BEST").toString().trim().toUpperCase() || "BEST";
         } catch {}
 
+        
+
+        let destIso2 = "FR";
+        try {
+          destIso2 = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
+        } catch {}
+// Fetch active project to know the selected destination
+        let destinationIso2 = "SCHENGEN";
+        try {
+          const pr = await authFetch("/api/v1/projects/active");
+          if (pr.ok) {
+            const pj: any = await pr.json();
+            destinationIso2 = (pj?.destinationIso2 ?? pj?.destination ?? "SCHENGEN").toString().toUpperCase();
+          }
+        } catch {}
+
         const res = await authFetch(
-          `/api/v1/requirements/travel?destination=SCHENGEN&passport=${encodeURIComponent(passportChoice)}`
+          `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
         );
 
         if (!res.ok) {
@@ -196,7 +274,7 @@ export function NextStepsCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">What you need next</h2>
-          <p className="text-sm text-gray-600">Based on your selected passport and Schengen rules.</p>
+          <p className="text-sm text-gray-600">Based on your selected passport and destination rules.</p>
         </div>
 
         {step ? (

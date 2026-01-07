@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 
+
+const SCHENGEN_SET = new Set<string>([
+  "AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IS","IT","LI","LT","LU","LV","MT","NL","NO","PL","PT","RO","SE","SI","SK"
+]);
+
+function isSupportedDestinationIso2(code?: string) {
+  const v = (code ?? "").toString().toUpperCase();
+  return v === "US" || v === "CA" || v === "GB" || SCHENGEN_SET.has(v);
+}
+
+import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
+
 type ActiveProject = {
   id: string;
   destinationCountry: string;
@@ -23,6 +35,14 @@ export default function ProjectSection({
   onChanged?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
+  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
+
+  const supportedCountries = (countries ?? [])
+    .map((c: any) => ({
+      code: String(c?.code ?? c?.iso2 ?? c?.id ?? "").toUpperCase(),
+      name: String(c?.name ?? c?.label ?? c?.country ?? "")
+    }))
+    .filter((c: any) => c.code && c.name && isSupportedDestinationIso2(c.code));
   const [passports, setPassports] = useState<{ countryCode: string }[]>([]);
   const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
@@ -36,6 +56,22 @@ export default function ProjectSection({
 
   async function load() {
     setLoading(true);
+
+      // load countries for Destination combobox
+      try {
+        const rc = await authFetch("/api/v1/meta/countries");
+        if (rc.ok) {
+          const arr = await rc.json();
+          if (Array.isArray(arr)) {
+            setCountries(
+              arr.map((c: any) => ({
+                code: String(c?.code ?? c?.iso2 ?? c?.id ?? "").toUpperCase(),
+                name: String(c?.name ?? c?.label ?? c?.country ?? "")
+              })).filter((x: any) => x.code && x.name)
+            );
+          }
+        }
+      } catch {}
     try {
       // load passports for passport selector
       try {
@@ -160,13 +196,17 @@ export default function ProjectSection({
       <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
         <div className="md:col-span-1">
           <label className="text-sm font-medium">Destination (ISO2)</label>
-          <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            value={destinationCountry}
-            onChange={(e) => setDestinationCountry(e.target.value)}
-            placeholder="DE"
-            maxLength={2}
-          />
+          
+<PassportCountryCombobox
+  countries={supportedCountries}
+  value={destinationCountry}
+  onChange={(v) => {
+    setDestinationCountry(v);
+    try { localStorage.setItem("activeProjectDestinationIso2", (v || "").toString().toUpperCase()); } catch {}
+  }}
+  placeholder="Choose a destination…"
+/>
+
         </div>
 
         <div className="md:col-span-1">
