@@ -1,9 +1,14 @@
 "use client";
 
 import { iso2ToTravelDestination } from "@/lib/travelDestination";
+const SCHENGEN_SET = new Set<string>([
+  "AT","BE","CH","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IS","IT",
+  "LI","LT","LU","LV","MT","NL","NO","PL","PT","SE","SI","SK"
+]);
+
+
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-
 type EntryResult =
   | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
   | {

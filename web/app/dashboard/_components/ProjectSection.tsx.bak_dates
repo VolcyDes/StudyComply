@@ -244,13 +244,7 @@ export default function ProjectSection({
   type="date"
   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
   value={startDate}
-  onChange={(e) => {
-  const v = e.target.value;
-  setStartDate(v);
-  if (endDate && v && endDate < v) {
-    setEndDate(v);
-  }
-}}
+  onChange={(e) => setStartDate(e.target.value)}
 />
 
 </div>
@@ -261,11 +255,7 @@ export default function ProjectSection({
             className="mt-1 w-full rounded-xl border px-3 py-2"
             type="date"
             value={endDate}
-            onChange={(e) => {
-  const v = e.target.value;
-  if (startDate && v < startDate) return;
-  setEndDate(v);
-}}
+            onChange={(e) => setEndDate(e.target.value)}
           />
         </div>
 

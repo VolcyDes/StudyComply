@@ -60,39 +60,36 @@ export function SchengenRequirementsCard({ authFetch, refreshKey }: { authFetch:
   }, [refreshKey]);
 
   useEffect(() => {
-  async function load() {
-    try {
-      setLoading(true);
-      setErr(null);
-
-      let destIso2 = "FR";
+    async function load() {
       try {
-        destIso2 = (localStorage.getItem("activeProjectDestinationIso2") || "FR")
-          .toString()
-          .trim()
-          .toUpperCase();
-      } catch {}
+        setLoading(true);
+        setErr(null);
+        let destIso2 = "FR";
+        try {
+          destIso2 = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
+        } catch {}
+} catch {}
 
-      const res = await authFetch(
-        `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
-      );
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `Failed (${res.status})`);
+
+        const res = await authFetch(
+          `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
+        );
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt || `Failed (${res.status})`);
+        }
+        const json = (await res.json()) as EntryResult;
+        setData(json);
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to load requirements");
+      } finally {
+        setLoading(false);
       }
-      const json = (await res.json()) as EntryResult;
-      setData(json);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to load requirements");
-    } finally {
-      setLoading(false);
     }
-  }
+    load();
+  }, [refreshKey]);
 
-  load();
-}, [refreshKey, passportChoice]);
-
-return (
+  return (
     <div className="rounded-2xl border bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
