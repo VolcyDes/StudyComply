@@ -208,7 +208,12 @@ export default function ProjectSection({
 
       <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
         <div className="md:col-span-1">
-          <label className="text-sm font-medium">Destination</label>
+          <div className="flex items-center justify-between gap-2">
+  <label className="text-sm font-medium">Destination</label>
+  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-gray-700">
+    Zone: <span className="ml-1 font-mono">{iso2ToTravelDestinationZone(destinationCountry)}</span>
+  </span>
+</div>
           
 <PassportCountryCombobox
   countries={supportedCountries}
@@ -239,11 +244,20 @@ export default function ProjectSection({
 
         <div className="md:col-span-1">
           <label className="text-sm font-medium">Start date</label>
-<PassportCountryCombobox
-            countries={supportedCountries}
-            value={destinationCountry}
-            onChange={setDestinationCountry}
-          />
+
+<input
+  type="date"
+  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+  value={startDate}
+  onChange={(e) => {
+  const v = e.target.value;
+  setStartDate(v);
+  if (endDate && v && endDate < v) {
+    setEndDate(v);
+  }
+}}
+/>
+
 </div>
 
         <div className="md:col-span-1">
@@ -252,7 +266,11 @@ export default function ProjectSection({
             className="mt-1 w-full rounded-xl border px-3 py-2"
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+  const v = e.target.value;
+  if (startDate && v < startDate) return;
+  setEndDate(v);
+}}
           />
         </div>
 

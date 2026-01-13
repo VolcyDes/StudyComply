@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
 
 const MANUAL_SCHENGEN_ISO2 = new Set([
   "AT","BE","CZ","DK","EE","FI","FR","DE","GR","HU","IS","IT","LV","LI","LT","LU",
@@ -23,23 +27,6 @@ function iso2ToTravelDestinationZone(iso2: string): "SCHENGEN" | "UK" | "USA" | 
   if (code === "GB") return "UK";
   return "SCHENGEN";
 }
-
-"use client";
-
-import { useEffect, useState } from "react";
-
-
-const SCHENGEN_SET = new Set<string>([
-  "AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IS","IT","LI","LT","LU","LV","MT","NL","NO","PL","PT","RO","SE","SI","SK"
-]);
-
-function isSupportedDestinationIso2(code?: string) {
-  const v = (code ?? "").toString().toUpperCase();
-  return v === "US" || v === "CA" || v === "GB" || SCHENGEN_SET.has(v);
-}
-
-import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
-
 type ActiveProject = {
   id: string;
   destinationCountry: string;
@@ -51,6 +38,16 @@ type ActiveProject = {
 
 function isoToDateInput(iso: string) {
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+function stayDaysFromInputs(start: string, end: string): number | null {
+  if (!start || !end) return null;
+  const a = new Date(start);
+  const b = new Date(end);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const ms = b.getTime() - a.getTime();
+  if (ms < 0) return null;
+  return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
 export default function ProjectSection({
@@ -68,13 +65,15 @@ export default function ProjectSection({
       code: String(c?.code ?? c?.iso2 ?? c?.id ?? "").toUpperCase(),
       name: String(c?.name ?? c?.label ?? c?.country ?? "")
     }))
-    .filter((c: any) => c.code && c.name && isSupportedDestinationIso2(c.code));
+    .filter((c: any) => c.code && c.name && isSupportedDestinationCountry(c));
   const [passports, setPassports] = useState<{ countryCode: string }[]>([]);
   const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
-  const [purpose, setPurpose] = useState("exchange");
+  
+  const stayDays = stayDaysFromInputs(startDate, endDate);
+const [purpose, setPurpose] = useState("exchange");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -221,7 +220,12 @@ export default function ProjectSection({
 
       <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
         <div className="md:col-span-1">
-          <label className="text-sm font-medium">Destination (ISO2)</label>
+          <div className="flex items-center justify-between gap-2">
+  <label className="text-sm font-medium">Destination</label>
+  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-gray-700">
+    Zone: <span className="ml-1 font-mono">{iso2ToTravelDestinationZone(destinationCountry)}</span>
+  </span>
+</div>
           
 <PassportCountryCombobox
   countries={supportedCountries}
@@ -252,13 +256,21 @@ export default function ProjectSection({
 
         <div className="md:col-span-1">
           <label className="text-sm font-medium">Start date</label>
-          <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-        </div>
+
+<input
+  type="date"
+  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+  value={startDate}
+  onChange={(e) => {
+  const v = e.target.value;
+  setStartDate(v);
+  if (endDate && v && endDate < v) {
+    setEndDate(v);
+  }
+}}
+/>
+
+</div>
 
         <div className="md:col-span-1">
           <label className="text-sm font-medium">End date</label>
@@ -266,11 +278,21 @@ export default function ProjectSection({
             className="mt-1 w-full rounded-xl border px-3 py-2"
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => {
+  const v = e.target.value;
+  if (startDate && v < startDate) return;
+  setEndDate(v);
+}}
           />
         </div>
 
-        <div className="md:col-span-1">
+        
+      {stayDays !== null && stayDays > 90 ? (
+        <p className="text-xs text-amber-700">
+          ⚠️ This dashboard shows <b>short-stay</b> rules. Your selected dates are {stayDays} days.
+        </p>
+      ) : null}
+<div className="md:col-span-1">
           <label className="text-sm font-medium">Passport to use</label>
           <select
             className="mt-1 w-full rounded-xl border px-3 py-2"

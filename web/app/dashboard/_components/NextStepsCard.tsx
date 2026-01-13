@@ -192,14 +192,6 @@ export function NextStepsCard({
         } catch {}
 // Fetch active project to know the selected destination
         let destinationIso2 = "SCHENGEN";
-        try {
-          const pr = await authFetch("/api/v1/projects/active");
-          if (pr.ok) {
-            const pj: any = await pr.json();
-            destinationIso2 = (pj?.destinationIso2 ?? pj?.destination ?? "SCHENGEN").toString().toUpperCase();
-          }
-        } catch {}
-
         const res = await authFetch(
           `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
         );

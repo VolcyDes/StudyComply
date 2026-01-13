@@ -40,6 +40,16 @@ function isoToDateInput(iso: string) {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
+function stayDaysFromInputs(start: string, end: string): number | null {
+  if (!start || !end) return null;
+  const a = new Date(start);
+  const b = new Date(end);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  const ms = b.getTime() - a.getTime();
+  if (ms < 0) return null;
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
 export default function ProjectSection({
   authFetch,
   onChanged,
@@ -61,10 +71,11 @@ export default function ProjectSection({
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
-  const [purpose, setPurpose] = useState("exchange");
+const [purpose, setPurpose] = useState("exchange");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  const stayDays = stayDaysFromInputs(startDate, endDate);
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -208,7 +219,12 @@ export default function ProjectSection({
 
       <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
         <div className="md:col-span-1">
-          <label className="text-sm font-medium">Destination</label>
+          <div className="flex items-center justify-between gap-2">
+  <label className="text-sm font-medium">Destination</label>
+  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-gray-700">
+    Zone: <span className="ml-1 font-mono">{iso2ToTravelDestinationZone(destinationCountry)}</span>
+  </span>
+</div>
           
 <PassportCountryCombobox
   countries={supportedCountries}
@@ -269,7 +285,13 @@ export default function ProjectSection({
           />
         </div>
 
-        <div className="md:col-span-1">
+        
+      {stayDays !== null && stayDays > 90 ? (
+        <p className="text-xs text-amber-700">
+          ⚠️ This dashboard shows <b>short-stay</b> rules. Your selected dates are {stayDays} days.
+        </p>
+      ) : null}
+<div className="md:col-span-1">
           <label className="text-sm font-medium">Passport to use</label>
           <select
             className="mt-1 w-full rounded-xl border px-3 py-2"
