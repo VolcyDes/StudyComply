@@ -30,8 +30,105 @@ type NextStep = {
   urgency: "LOW" | "MEDIUM" | "HIGH";
   createDoc?: { title: string; type: string };
   ctaLabel?: string;
+
 };
 
+type ChecklistItem = {
+  id: string;
+  title: string;
+  detail: string;
+  status: "DONE" | "TODO" | "INFO";
+  urgency?: "LOW" | "MEDIUM" | "HIGH";
+  link?: string;
+};
+
+function buildChecklist(args: {
+  destinationIso2: string;
+  passportChoice: string;
+  travelResult: any | null;
+  stayDays?: number;
+}): ChecklistItem[] {
+  const items: ChecklistItem[] = [];
+
+  const destIso2 = (args.destinationIso2 || "").toUpperCase();
+  const passport = (args.passportChoice || "BEST").toUpperCase();
+  const res = args.travelResult;
+  const stayDays = typeof args.stayDays === "number" ? args.stayDays : 0;
+  const longStay = stayDays > 90;
+
+  items.push({
+    id: "passport",
+    title: "Choose the passport you will use",
+    detail: passport === "BEST"
+      ? "We will use your best passport for this destination."
+      : `Selected passport: ${passport}`,
+    status: "DONE",
+    urgency: "LOW",
+  });
+
+  items.push({
+    id: "destination",
+    title: "Confirm your destination",
+    detail: destIso2 ? `Destination country: ${destIso2}` : "Select a destination country in Active mobility project.",
+    status: destIso2 ? "DONE" : "TODO",
+    urgency: destIso2 ? "LOW" : "HIGH",
+  });
+
+  if (res?.status === "AUTH_REQUIRED") {
+    const auth = res?.meta?.auth ? String(res.meta.auth) : "authorization";
+    items.push({
+      id: "auth",
+      title: `Get your ${auth}`,
+      detail: res?.message || "You need an authorization before travelling.",
+      status: "TODO",
+      urgency: "HIGH",
+    });
+  } else if (res?.status === "VISA_REQUIRED") {
+    items.push({
+      id: "visa",
+      title: "Start your visa application",
+      detail: res?.message || "A visa is required for this destination.",
+      status: "TODO",
+      urgency: "HIGH",
+    });
+  } else if (res?.status === "FREE" || res?.status === "VISA_FREE") {
+    items.push({
+      id: "rule",
+      title: "Travel rule for short stays",
+      detail: res?.message || "You can travel for short stays under the current rules.",
+      status: "INFO",
+      urgency: "LOW",
+    });
+  } else {
+    items.push({
+      id: "rule",
+      title: "Check travel requirements",
+      detail: "We could not load a clear rule. Try refreshing.",
+      status: "INFO",
+      urgency: "MEDIUM",
+    });
+  }
+
+  if (longStay) {
+    items.push({
+      id: "longstay",
+      title: "Long stay (90+ days)",
+      detail: "For stays longer than 90 days, you usually need a long-stay visa or residence permit. Short-stay rules (ETA/ESTA/eTA) may not apply.",
+      status: "INFO",
+      urgency: "MEDIUM",
+    });
+  }
+
+  items.push({
+    id: "vault",
+    title: "Store your documents",
+    detail: "Add your visa/authorization/insurance documents to the vault and track expiry dates.",
+    status: "INFO",
+    urgency: "LOW",
+  });
+
+  return items;
+}
 function pillClass(u: NextStep["urgency"]) {
   switch (u) {
     case "HIGH":
@@ -147,15 +244,48 @@ export function NextStepsCard({
   refreshKey: number;
   onDocumentCreated?: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  const [destIso2, setDestIso2] = useState<string>("FR");
+  const [passportChoice, setPassportChoice] = useState<string>("BEST");
+  const [stayDays, setStayDays] = useState<number>(0);
+
+  useEffect(() => {
+    setMounted(true);
+    try {
+      const d = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
+      const psp = (localStorage.getItem("activePassport") || "BEST").toString().trim().toUpperCase();
+
+      const sIso = localStorage.getItem("activeProjectStartDate");
+      const eIso = localStorage.getItem("activeProjectEndDate");
+      const sd = sIso ? new Date(sIso) : null;
+      const ed = eIso ? new Date(eIso) : null;
+
+      let days = 0;
+      if (sd && ed && !Number.isNaN(sd.getTime()) && !Number.isNaN(ed.getTime())) {
+        const diff = Math.ceil((ed.getTime() - sd.getTime()) / (1000 * 60 * 60 * 24));
+        days = Number.isFinite(diff) && diff > 0 ? diff : 0;
+      }
+
+      setDestIso2(d || "FR");
+      setPassportChoice(psp || "BEST");
+      setStayDays(days);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const [data, setData] = useState<EntryResult | null>(null);
 
-  const destIso2 = (() => {
-    try {
-      return (localStorage.getItem("activeProjectDestinationIso2") || "").toString().toUpperCase();
-    } catch {
-      return "";
-    }
-  })();
+  const checklist = useMemo(() => {
+    if (!mounted) return [];
+    return buildChecklist({
+      destinationIso2: destIso2,
+      passportChoice,
+      travelResult: data,
+      stayDays,
+    });
+  }, [mounted, destIso2, passportChoice, data, stayDays]);
   const [step, setStep] = useState<NextStep | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -358,6 +488,31 @@ export function NextStepsCard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    
+      
+      {mounted && checklist.length > 0 && (
+        <div className="rounded-2xl border bg-white p-5 mt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Your checklist</h2>
+              <p className="text-sm text-gray-600">Clear steps based on your destination and passport.</p>
+            </div>
+          </div>
+
+          <ul className="mt-4 space-y-3">
+            {checklist.map((it) => (
+              <li key={it.id} className="rounded-xl border bg-gray-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{it.title}</p>
+                    <p className="mt-1 text-sm text-gray-600" suppressHydrationWarning>{it.detail}</p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+</div>
   );
 }
