@@ -6,7 +6,6 @@ import { API_BASE_URL } from "../../lib/config";
 
 import PassportsSection from "./_components/PassportsSection";
 import ProjectSection from "./_components/ProjectSection";
-import { SchengenRequirementsCard } from "./_components/SchengenRequirementsCard";
 import { NextStepsCard } from "./_components/NextStepsCard";
 type MeResponse = {
   user: { id: string; email: string; createdAt: string; updatedAt: string };
@@ -381,6 +380,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
+      <p className="mt-1 text-sm text-gray-600">Manage passports in <a className="underline" href="/profile">Profile</a>.</p>
           <p className="mt-2 text-sm text-gray-600">
             {loading ? "Loading your profile..." : <>Logged in as <span className="font-medium">{email}</span></>}
           </p>
@@ -388,41 +388,45 @@ export default function DashboardPage() {
       </div>
 
       {/* 1) Passports */}
-      <PassportsSection authFetch={authFetch} onChanged={bumpRequirements} showAddForm={false} />
-
       {/* 2) Active Project */}
       <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
-
-      
-      <SchengenRequirementsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} />
-
       <NextStepsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
 {/* 3) Requirements */}
 {/* Add document */}
+      
+
+
+      {/* Documents list */}
       <div className="rounded-2xl border bg-white p-5">
-        <h2 className="text-lg font-semibold">Add a document</h2>
-        <form onSubmit={createDocument} className="mt-4 grid gap-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="md:col-span-1">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Document vault</h2>
+        <p className="mt-1 text-sm text-gray-600">Store documents, track expiry dates, and attach PDFs.</p>
+
+        <details className="mt-4 rounded-xl border bg-gray-50 p-4">
+          <summary className="cursor-pointer text-sm font-medium">+ Add a document</summary>
+
+          <form onSubmit={createDocument} className="mt-4 grid gap-3 md:grid-cols-3">
+            <div>
               <label className="text-sm font-medium">Title</label>
               <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Visa étudiant"
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                placeholder="e.g., Student visa"
                 required
               />
             </div>
 
-            <div className="md:col-span-1">
+            <div>
               <label className="text-sm font-medium">Type</label>
               <select
-                className="mt-1 w-full rounded-xl border px-3 py-2"
                 value={type}
                 onChange={(e) => setType(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
               >
                 <option value="visa">Visa</option>
                 <option value="residence_permit">Residence permit</option>
+                <option value="eta">Authorization</option>
                 <option value="insurance">Insurance</option>
                 <option value="contract">Contract</option>
                 <option value="passport">Passport</option>
@@ -431,34 +435,30 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            <div className="md:col-span-1">
+            <div>
               <label className="text-sm font-medium">Expiry date</label>
               <input
-                className="mt-1 w-full rounded-xl border px-3 py-2"
                 type="date"
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
                 required
               />
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              disabled={creating}
-              className="rounded-xl bg-black px-4 py-2 text-white hover:opacity-90 disabled:opacity-60"
-            >
-              {creating ? "Adding..." : "Add document"}
-            </button>
-          </div>
-        </form>
-      </div>
+            <div className="md:col-span-3">
+              <button
+                type="submit"
+                disabled={creating}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {creating ? "Adding…" : "Add document"}
+              </button>
+            </div>
+          </form>
+        </details>
 
-      {/* Documents list */}
-      <div className="rounded-2xl border bg-white p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Your documents</h2>
+
           <button
             onClick={loadDocuments}
             className="rounded-xl border px-3 py-1.5 hover:bg-gray-50 text-sm"
