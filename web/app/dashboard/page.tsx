@@ -380,7 +380,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-      <p className="mt-1 text-sm text-gray-600">Manage passports in <a className="underline" href="/profile">Profile</a>.</p>
+          <p className="mt-1 text-sm text-gray-600">Manage passports in <a className="underline" href="/profile">Profile</a>.</p>
           <p className="mt-2 text-sm text-gray-600">
             {loading ? "Loading your profile..." : <>Logged in as <span className="font-medium">{email}</span></>}
           </p>
@@ -389,15 +389,27 @@ export default function DashboardPage() {
 
       {/* 1) Passports */}
       {/* 2) Active Project */}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
       <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
+        </div>
+
+        <div className="space-y-6">
+
       <NextStepsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
+        </div>
+      </div>
+
 {/* 3) Requirements */}
 {/* Add document */}
       
 
 
       {/* Documents list */}
-      <div className="rounded-2xl border bg-white p-5">
+      
+      <div className="mt-6">
+<div className="rounded-2xl border bg-white p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Document vault</h2>
         <p className="mt-1 text-sm text-gray-600">Store documents, track expiry dates, and attach PDFs.</p>
@@ -626,6 +638,8 @@ export default function DashboardPage() {
           </ul>
         )}
       </div>
+      </div>
+
 
       <p className="text-xs text-gray-500">
         API: <span className="font-mono">{API_BASE_URL}</span>

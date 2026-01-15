@@ -40,6 +40,11 @@ type ChecklistItem = {
   status: "DONE" | "TODO" | "INFO";
   urgency?: "LOW" | "MEDIUM" | "HIGH";
   link?: string;
+
+  // ✅ new
+  canComplete?: boolean;
+  storageKey?: string;
+
 };
 
 function buildChecklist(args: {
@@ -54,26 +59,7 @@ function buildChecklist(args: {
   const passport = (args.passportChoice || "BEST").toUpperCase();
   const res = args.travelResult;
   const stayDays = typeof args.stayDays === "number" ? args.stayDays : 0;
-  const longStay = stayDays > 90;
-
-  items.push({
-    id: "passport",
-    title: "Choose the passport you will use",
-    detail: passport === "BEST"
-      ? "We will use your best passport for this destination."
-      : `Selected passport: ${passport}`,
-    status: "DONE",
-    urgency: "LOW",
-  });
-
-  items.push({
-    id: "destination",
-    title: "Confirm your destination",
-    detail: destIso2 ? `Destination country: ${destIso2}` : "Select a destination country in Active mobility project.",
-    status: destIso2 ? "DONE" : "TODO",
-    urgency: destIso2 ? "LOW" : "HIGH",
-  });
-
+const longStay = stayDays > 90;
   if (res?.status === "AUTH_REQUIRED") {
     const auth = res?.meta?.auth ? String(res.meta.auth) : "authorization";
     items.push({
@@ -82,7 +68,8 @@ function buildChecklist(args: {
       detail: res?.message || "You need an authorization before travelling.",
       status: "TODO",
       urgency: "HIGH",
-    });
+      canComplete: true,
+});
   } else if (res?.status === "VISA_REQUIRED") {
     items.push({
       id: "visa",
@@ -90,7 +77,8 @@ function buildChecklist(args: {
       detail: res?.message || "A visa is required for this destination.",
       status: "TODO",
       urgency: "HIGH",
-    });
+      canComplete: true,
+});
   } else if (res?.status === "FREE" || res?.status === "VISA_FREE") {
     items.push({
       id: "rule",
@@ -116,7 +104,8 @@ function buildChecklist(args: {
       detail: "For stays longer than 90 days, you usually need a long-stay visa or residence permit. Short-stay rules (ETA/ESTA/eTA) may not apply.",
       status: "INFO",
       urgency: "MEDIUM",
-    });
+      canComplete: true,
+});
   }
 
   items.push({
@@ -125,7 +114,8 @@ function buildChecklist(args: {
     detail: "Add your visa/authorization/insurance documents to the vault and track expiry dates.",
     status: "INFO",
     urgency: "LOW",
-  });
+    canComplete: true,
+});
 
   return items;
 }
@@ -244,7 +234,101 @@ export function NextStepsCard({
   refreshKey: number;
   onDocumentCreated?: () => void;
 }) {
+
+  
+
   const [mounted, setMounted] = useState(false);
+  
+
+  // ✅ checklist completion state (persisted)
+  const [doneMap, setDoneMap] = useState<Record<string, boolean>>({});
+
+const doneStorageKey = useMemo(() => {
+    // Unique per "active project context" (destination + passport + stay length)
+    if (!mounted) return "sc:done:pending";
+
+    let dest = "NA";
+    let passport = "BEST";
+    let stay = 0;
+
+    try {
+      dest =
+        (localStorage.getItem("activeProjectDestinationIso2") || "NA")
+          .toString()
+          .trim()
+          .toUpperCase() || "NA";
+    } catch {}
+
+    try {
+      passport =
+        (localStorage.getItem("activePassport") || "BEST")
+          .toString()
+          .trim()
+          .toUpperCase() || "BEST";
+    } catch {}
+
+    try {
+      const s = localStorage.getItem("activeProjectStartDate") || "";
+      const e = localStorage.getItem("activeProjectEndDate") || "";
+      const sd = new Date(s);
+      const ed = new Date(e);
+      if (!Number.isNaN(sd.getTime()) && !Number.isNaN(ed.getTime())) {
+        stay = Math.max(0, Math.round((ed.getTime() - sd.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+    } catch {}
+
+    return `sc:done:${dest}:${passport}:${stay}`;
+  }, [mounted, refreshKey]);  
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const raw = localStorage.getItem(doneStorageKey);
+      setDoneMap(raw ? JSON.parse(raw) : {});
+    } catch {
+      setDoneMap({});
+    }
+  }, [mounted, doneStorageKey]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(doneStorageKey, JSON.stringify(doneMap));
+    } catch {}
+  }, [mounted, doneStorageKey, doneMap]);
+const checklistKey = useMemo(() => {
+    if (!mounted) return "checklist:pending";
+    const dest = (() => {
+      try { return (localStorage.getItem("activeProjectDestinationIso2") || "").toUpperCase(); } catch { return ""; }
+    })();
+    const passport = (() => {
+      try { return (localStorage.getItem("activeProjectPassportChoice") || "BEST").toUpperCase(); } catch { return "BEST"; }
+    })();
+    const purpose = (() => {
+      try { return (localStorage.getItem("activeProjectPurpose") || "").toLowerCase(); } catch { return ""; }
+    })();
+    return `checklist:v1:${dest}:${passport}:${purpose}`;
+  }, [mounted]);
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const raw = localStorage.getItem(checklistKey);
+      setDoneMap(raw ? JSON.parse(raw) : {});
+    } catch {
+      setDoneMap({});
+    }
+  }, [mounted, checklistKey]);
+
+  function toggleDone(itemId: string) {
+    setDoneMap((prev) => {
+      const next = { ...prev, [itemId]: !prev[itemId] };
+      try {
+        localStorage.setItem(checklistKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }
+
 
   const [destIso2, setDestIso2] = useState<string>("FR");
   const [passportChoice, setPassportChoice] = useState<string>("BEST");
@@ -286,6 +370,14 @@ export function NextStepsCard({
       stayDays,
     });
   }, [mounted, destIso2, passportChoice, data, stayDays]);
+
+  const nextAction = useMemo(() => {
+    // Next actionable TODO (not already done)
+    const first = (checklist || []).find((x: any) => x?.status === "TODO" && !doneMap?.[x.id]);
+    return first || null;
+  }, [checklist, doneMap]);
+
+
   const [step, setStep] = useState<NextStep | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -491,27 +583,35 @@ export function NextStepsCard({
     
       
       {mounted && checklist.length > 0 && (
-        <div className="rounded-2xl border bg-white p-5 mt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Your checklist</h2>
-              <p className="text-sm text-gray-600">Clear steps based on your destination and passport.</p>
-            </div>
-          </div>
+        <details className="mt-4 rounded-2xl border bg-white p-5">
+          <summary className="cursor-pointer select-none text-sm font-medium">
+            Your checklist
+            <span className="ml-2 text-sm font-normal text-gray-600">(click to expand)</span>
+          </summary>
 
+          <div className="mt-4">
           <ul className="mt-4 space-y-3">
-            {checklist.map((it) => (
-              <li key={it.id} className="rounded-xl border bg-gray-50 p-4">
+            {checklist.filter((it) => it.id !== "passport" && it.id !== "destination").map((it) => (<li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${doneMap[it.id] ? "opacity-70" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-medium">{it.title}</p>
-                    <p className="mt-1 text-sm text-gray-600" suppressHydrationWarning>{it.detail}</p>
+                    <p className={`font-medium ${doneMap[it.id] ? "line-through" : ""}`}>{it.title}</p>
+                    <p className={`mt-1 text-sm text-gray-600 ${doneMap[it.id] ? "line-through" : ""}`} suppressHydrationWarning>{it.detail}</p>
                   </div>
-                </div>
+                
+                  <button
+                    type="button"
+                    onClick={() => toggleDone(it.id)}
+                    className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${doneMap[it.id] ? "bg-white" : "bg-black text-white"}`}
+                  >
+                    {doneMap[it.id] ? "Undo" : "Done"}
+                  </button>
+</div>
               </li>
             ))}
           </ul>
-        </div>
+        
+          </div>
+        </details>
       )}
 </div>
   );

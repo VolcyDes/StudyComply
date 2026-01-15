@@ -37,3 +37,22 @@ web/app/about/
 web/app/client/
 web/app/pricing/
 web/_bak/
+
+# Local backups
+*.bak
+*.bak_*
+*_bak_*
+web/**/.bak_*
+web/_bak/
+
+# Local scripts / experiments
+web/PY/
+web/Build/
+
+# Next artifacts
+web/next/
+web/web@*
+
+# Temp API rules (WIP)
+api/src/rules/
+

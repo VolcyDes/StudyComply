@@ -72,7 +72,9 @@ export default function ProjectSection({
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
 const [purpose, setPurpose] = useState("exchange");
-  const [startDate, setStartDate] = useState("");
+  
+
+  const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   const stayDays = stayDaysFromInputs(startDate, endDate);
@@ -217,15 +219,9 @@ const [purpose, setPurpose] = useState("exchange");
         <p className="mt-4 text-sm text-gray-600">No active project yet.</p>
       )}
 
-      <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
-        <div className="md:col-span-1">
-          <div className="flex items-center justify-between gap-2">
+      <form onSubmit={saveProject} className="mt-6 grid gap-6 sm:grid-cols-2">
+        <div className="md:col-span-1 min-w-0 space-y-1">
   <label className="text-sm font-medium">Destination</label>
-  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-gray-700">
-    Zone: <span className="ml-1 font-mono">{iso2ToTravelDestinationZone(destinationCountry)}</span>
-  </span>
-</div>
-          
 <PassportCountryCombobox
   countries={supportedCountries}
   value={destinationCountry}
@@ -234,14 +230,16 @@ const [purpose, setPurpose] = useState("exchange");
     try { localStorage.setItem("activeProjectDestinationIso2", (v || "").toString().toUpperCase()); } catch {}
   }}
   placeholder="Choose a destination…"
+  triggerClassName="h-10 rounded-xl border px-3 text-sm"
 />
+          <p className="mt-2 text-xs text-gray-500">Rules: {iso2ToTravelDestinationZone(destinationCountry)}</p>
 
         </div>
 
-        <div className="md:col-span-1">
+        <div className="md:col-span-1 min-w-0 space-y-1">
           <label className="text-sm font-medium">Purpose</label>
           <select
-            className="mt-1 w-full rounded-xl border px-3 py-2"
+            className={CONTROL_CLASS}
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
           >
@@ -253,7 +251,7 @@ const [purpose, setPurpose] = useState("exchange");
           </select>
         </div>
 
-        <div className="md:col-span-1">
+        <div className="md:col-span-1 min-w-0 space-y-1">
           <label className="text-sm font-medium">Start date</label>
 
 <input
@@ -271,10 +269,10 @@ const [purpose, setPurpose] = useState("exchange");
 
 </div>
 
-        <div className="md:col-span-1">
+        <div className="md:col-span-1 min-w-0 space-y-1">
           <label className="text-sm font-medium">End date</label>
           <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
+            className={CONTROL_CLASS}
             type="date"
             value={endDate}
             onChange={(e) => {
@@ -291,10 +289,10 @@ const [purpose, setPurpose] = useState("exchange");
           ⚠️ This dashboard shows <b>short-stay</b> rules. Your selected dates are {stayDays} days.
         </p>
       ) : null}
-<div className="md:col-span-1">
+<div className="md:col-span-1 min-w-0 space-y-1">
           <label className="text-sm font-medium">Passport to use</label>
           <select
-            className="mt-1 w-full rounded-xl border px-3 py-2"
+            className={CONTROL_CLASS}
             value={passportChoice}
             onChange={(e) => onPassportChoice(e.target.value)}
           >
@@ -305,7 +303,7 @@ const [purpose, setPurpose] = useState("exchange");
           </select>
         </div>
 
-        <div className="md:col-span-4">
+        <div className="min-w-0 space-y-1 sm:col-span-2">
           <button
             type="submit"
             disabled={saving}

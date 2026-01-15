@@ -29,12 +29,14 @@ export function PassportCountryCombobox({
   value,
   onChange,
   placeholder = "Choose a country…",
+  triggerClassName,
 }: {
   countries: Country[];
   value: string | null;
   onChange: (code: string) => void;
   placeholder?: string;
-}) {
+
+  triggerClassName?: string;}) {
   const [open, setOpen] = React.useState(false);
 
   const selected = React.useMemo(() => {
@@ -45,9 +47,9 @@ export function PassportCountryCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+        <Button variant="outline" role="combobox" aria-expanded={open} className={cn("w-full h-10 rounded-xl border px-3 justify-between min-w-0", triggerClassName)}>
           {selected ? (
-            <span className="flex items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               <img
                 src={flagUrl(selected.code)}
                 alt={selected.code}
@@ -55,11 +57,11 @@ export function PassportCountryCombobox({
                 height={14}
                 className="rounded-sm"
               />
-              <span>{selected.name}</span>
-              <span className="text-muted-foreground">({selected.code})</span>
+              <span className="truncate">{selected.name}</span>
+              <span className="shrink-0 whitespace-nowrap text-muted-foreground">({selected.code})</span>
             </span>
           ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="truncate text-muted-foreground">{placeholder}</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -87,7 +89,7 @@ export function PassportCountryCombobox({
                     height={14}
                     className="mr-2 rounded-sm"
                   />
-                  <span className="flex-1">{c.name}</span>
+                  <span className="flex-1 truncate">{c.name}</span>
                   <span className="text-muted-foreground mr-2">{c.code}</span>
                   <Check className={cn("h-4 w-4", value === c.code ? "opacity-100" : "opacity-0")} />
                 </CommandItem>
