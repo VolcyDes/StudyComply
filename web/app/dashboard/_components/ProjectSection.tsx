@@ -51,8 +51,11 @@ export default function ProjectSection({
 const [purpose, setPurpose] = useState("exchange");
   
 
-  const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";const [startDate, setStartDate] = useState("");
+  const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";
+
+  const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
 
   const stayDays = stayDaysFromInputs(startDate, endDate);
   const [saving, setSaving] = useState(false);
