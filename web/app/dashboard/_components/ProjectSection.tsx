@@ -3,30 +3,7 @@
 import { useEffect, useState } from "react";
 import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
 
-const MANUAL_SCHENGEN_ISO2 = new Set([
-  "AT","BE","CZ","DK","EE","FI","FR","DE","GR","HU","IS","IT","LV","LI","LT","LU",
-  "MT","NL","NO","PL","PT","SK","SI","ES","SE","CH","HR",
-]);
-
-const EXTRA_SUPPORTED_ISO2 = new Set(["US", "CA", "GB"]);
-
-function isSupportedDestinationCountry(country: any) {
-  const code = (country?.code ?? "").toUpperCase();
-  const isSchengen =
-    typeof country?.isSchengen === "boolean"
-      ? country.isSchengen
-      : MANUAL_SCHENGEN_ISO2.has(code);
-
-  return isSchengen || EXTRA_SUPPORTED_ISO2.has(code);
-}
-
-function iso2ToTravelDestinationZone(iso2: string): "SCHENGEN" | "UK" | "USA" | "CANADA" {
-  const code = (iso2 ?? "").toUpperCase();
-  if (code === "US") return "USA";
-  if (code === "CA") return "CANADA";
-  if (code === "GB") return "UK";
-  return "SCHENGEN";
-}
+import { isSupportedDestinationIso2, iso2ToTravelDestination } from "@/lib/travelDestination";
 type ActiveProject = {
   id: string;
   destinationCountry: string;
@@ -65,7 +42,7 @@ export default function ProjectSection({
       code: String(c?.code ?? c?.iso2 ?? c?.id ?? "").toUpperCase(),
       name: String(c?.name ?? c?.label ?? c?.country ?? "")
     }))
-    .filter((c: any) => c.code && c.name && isSupportedDestinationCountry(c));
+    .filter((c: any) => c.code && c.name && isSupportedDestinationIso2(c.code));
   const [passports, setPassports] = useState<{ countryCode: string }[]>([]);
   const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
@@ -232,7 +209,7 @@ const [purpose, setPurpose] = useState("exchange");
   placeholder="Choose a destination…"
   triggerClassName="h-10 rounded-xl border px-3 text-sm"
 />
-          <p className="mt-2 text-xs text-gray-500">Rules: {iso2ToTravelDestinationZone(destinationCountry)}</p>
+          <p className="mt-2 text-xs text-gray-500">Rules: {iso2ToTravelDestination(destinationCountry)}</p>
 
         </div>
 
