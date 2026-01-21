@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
 
 import { isSupportedDestinationIso2, iso2ToTravelDestination } from "@/lib/travelDestination";
+import { stayDaysToBucket, stayBucketLabel } from "@/lib/stayBucket";
 type ActiveProject = {
   id: string;
   destinationCountry: string;
@@ -27,6 +28,8 @@ function stayDaysFromInputs(start: string, end: string): number | null {
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
+type StayMode = "SHORT" | "SEMESTER" | "YEAR" | "MULTIYEAR" | "CUSTOM";
+
 export default function ProjectSection({
   authFetch,
   onChanged,
@@ -47,17 +50,57 @@ export default function ProjectSection({
   const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
 
-  const [destinationCountry, setDestinationCountry] = useState("DE");
+    const [destinationCountry, setDestinationCountry] = useState("DE");
+
+  const destinationName =
+    countries.find((c) => c.code === destinationCountry)?.name ||
+    destinationCountry;
+
+  const purposeLabel: Record<string, string> = {
+    exchange: "Exchange program",
+    internship: "Internship",
+    degree: "Full degree",
+    phd: "PhD / Research",
+    language: "Language program",
+  };
 const [purpose, setPurpose] = useState("exchange");
   
 
   const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";
 
+  const [stayMode, setStayMode] = useState<StayMode>("SHORT");
+  const [customDatesOpen, setCustomDatesOpen] = useState(false);
+
+  function addDays(dateInput: string, days: number): string {
+    const d = new Date(dateInput + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function daysForStayMode(mode: StayMode): number | null {
+    switch (mode) {
+      case "SHORT": return 90;
+      case "SEMESTER": return 180;
+      case "YEAR": return 365;
+      case "MULTIYEAR": return 365 * 4;
+      case "CUSTOM": return null;
+    }
+  }
+
   const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [endDate, setEndDate] = useState("");  const effectiveEndDate =
+    stayMode === "CUSTOM"
+      ? endDate
+      : startDate
+        ? addDays(startDate, daysForStayMode(stayMode) ?? 0)
+        : endDate;
 
-
-  const stayDays = stayDaysFromInputs(startDate, endDate);
+  const stayDays = stayDaysFromInputs(startDate, effectiveEndDate);
+  const stayBucket = stayMode === "CUSTOM" ? stayDaysToBucket(stayDays) : (stayMode as any);
+useEffect(() => {
+    try { try { localStorage.setItem("activeProjectStayMode", stayMode); } catch {}
+    localStorage.setItem("activeProjectStayBucket", stayBucket); } catch {}
+  }, [stayMode, stayBucket]);
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -92,6 +135,13 @@ const [purpose, setPurpose] = useState("exchange");
       try {
         const v = localStorage.getItem("activePassport") || "BEST";
         setPassportChoice(v.toString().trim().toUpperCase() || "BEST");
+      } catch {}
+      // restore stay mode
+      try {
+        const m = (localStorage.getItem("activeProjectStayMode") || "").toUpperCase();
+        if (m === "SHORT" || m === "SEMESTER" || m === "YEAR" || m === "MULTIYEAR" || m === "CUSTOM") {
+          setStayMode(m as any);
+        }
       } catch {}
       const res = await authFetch("/api/v1/projects/active");
       if (res.status === 200) {
@@ -183,21 +233,32 @@ const [purpose, setPurpose] = useState("exchange");
         Tell us where you&apos;re going and why. We&apos;ll compute your required documents.
       </p>
 
-      {loading ? (
-        <p className="mt-4 text-sm text-gray-600">Loading active project...</p>
-      ) : active ? (
-        <div className="mt-4 rounded-xl border bg-gray-50 p-4">
-          <p className="text-sm font-medium">
-            Current: {active.destinationCountry.toUpperCase()} • {active.purpose}
-          </p>
-          <p className="mt-1 text-xs text-gray-600">
-            {new Date(active.startDate).toLocaleDateString()} →{" "}
-            {new Date(active.endDate).toLocaleDateString()}
-          </p>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-gray-600">No active project yet.</p>
-      )}
+      
+{loading ? (
+  <p className="mt-4 text-sm text-gray-600">Loading active project...</p>
+) : active ? (
+  <div className="mt-4 rounded-xl border bg-gray-50 p-4 space-y-1">
+    <p className="text-xs uppercase tracking-wide text-gray-500">
+      Current project
+    </p>
+    <p className="text-sm font-medium">
+      {destinationName}
+    </p>
+    <p className="text-sm text-gray-600">
+      {purposeLabel[active.purpose] ?? active.purpose}
+    </p>
+    <p className="text-xs text-gray-500">
+      {new Date(active.startDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} →{" "}
+      {new Date(active.endDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+    </p>
+          <p className="text-xs text-gray-500">
+      Stay length: {stayMode === "CUSTOM" ? "Custom dates" : stayBucketLabel(stayBucket)}
+    </p>
+</div>
+) : (
+  <p className="mt-4 text-sm text-gray-600">No active project yet.</p>
+)}
+
 
       <form onSubmit={saveProject} className="mt-6 grid gap-6 sm:grid-cols-2">
         <div className="md:col-span-1 min-w-0 space-y-1">
@@ -230,41 +291,121 @@ const [purpose, setPurpose] = useState("exchange");
             <option value="language">Language program</option>
           </select>
         </div>
-
+        {/* Stay length */}
         <div className="md:col-span-1 min-w-0 space-y-1">
-          <label className="text-sm font-medium">Start date</label>
-
-<input
-  type="date"
-  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-  value={startDate}
-  onChange={(e) => {
-  const v = e.target.value;
-  setStartDate(v);
-  if (endDate && v && endDate < v) {
-    setEndDate(v);
-  }
-}}
-/>
-
-</div>
-
-        <div className="md:col-span-1 min-w-0 space-y-1">
-          <label className="text-sm font-medium">End date</label>
-          <input
+          <label className="text-sm font-medium">Stay length</label>
+          <select
             className={CONTROL_CLASS}
-            type="date"
-            value={endDate}
+            value={stayMode}
             onChange={(e) => {
-  const v = e.target.value;
-  if (startDate && v < startDate) return;
-  setEndDate(v);
+              const v = e.target.value as any;
+              setStayMode(v);
+              if (v === "CUSTOM") setCustomDatesOpen(true);
+              else setCustomDatesOpen(false);
 }}
-          />
-        </div>
-
+          >
+            <option value="SHORT">Short stay (≤ 90 days)</option>
+            <option value="SEMESTER">Semester (~ 4–6 months)</option>
+            <option value="YEAR">Academic year (~ 8–12 months)</option>
+            <option value="MULTIYEAR">Multi-year (2+ years)</option>
+            <option value="CUSTOM">Custom dates…</option>
+          </select>
+</div>
         
-      {stayDays !== null && stayDays > 90 ? (
+        {stayMode === "CUSTOM" ? (
+          <>
+            <div className="md:col-span-1 min-w-0 space-y-1">
+              <label className="text-sm font-medium">Custom dates</label>
+              <button
+                type="button"
+                className="h-10 w-full rounded-xl border px-3 text-sm text-left"
+                onClick={() => setCustomDatesOpen(true)}
+              >
+                {startDate && endDate ? `${startDate} → ${endDate}` : "Set dates…"}
+              </button>
+              <p className="text-xs text-gray-500">Exact dates (opens a popup).</p>
+            </div>
+
+            <dialog
+              open={customDatesOpen}
+              className="rounded-2xl border p-0 w-[min(520px,92vw)]"
+              onClose={() => setCustomDatesOpen(false)}
+            >
+              <div className="p-4 space-y-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Set custom dates</p>
+                  <p className="text-xs text-gray-500">
+                    Provide exact dates for your mobility project.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Start date</label>
+                    <input
+                      type="date"
+                      className={CONTROL_CLASS}
+                      value={startDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setStartDate(v);
+                        if (endDate && v && endDate < v) setEndDate(v);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">End date</label>
+                    <input
+                      type="date"
+                      className={CONTROL_CLASS}
+                      value={endDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (startDate && v < startDate) return;
+                        setEndDate(v);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    className="rounded-xl border px-4 py-2 text-sm"
+                    onClick={() => setCustomDatesOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl bg-black px-4 py-2 text-sm text-white"
+                    onClick={() => setCustomDatesOpen(false)}
+                  >
+                    Save dates
+                  </button>
+                </div>
+              </div>
+            </dialog>
+          </>
+        ) : (
+          <div className="md:col-span-1 min-w-0 space-y-1">
+            <label className="text-sm font-medium">Duration</label>
+            <div className="h-10 w-full rounded-xl border px-3 text-sm flex items-center bg-gray-50">
+              {stayMode === "SHORT"
+                ? "≤ 90 days"
+                : stayMode === "SEMESTER"
+                ? "~ 180 days (4–6 months)"
+                : stayMode === "YEAR"
+                ? "~ 365 days (8–12 months)"
+                : "~ multi-year (2+ years)"}
+            </div>
+            <p className="text-xs text-gray-500">
+              Choose “Custom dates…” if you want to enter exact dates.
+            </p>
+          </div>
+        )}
+
+{stayMode === "CUSTOM" && stayDays !== null && stayDays > 90 ? (
         <p className="text-xs text-amber-700">
           ⚠️ This dashboard shows <b>short-stay</b> rules. Your selected dates are {stayDays} days.
         </p>

@@ -4,6 +4,10 @@ import { iso2ToTravelDestination } from "@/lib/travelDestination";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
+import { fetchUserDocumentsWith, documentsTypeSet } from "@/lib/documents/api";
+import { isChecklistItemDone, isChecklistItemAutoDone } from "@/lib/dashboard/checklistDone";
+import type { ChecklistItemId } from "@/lib/dashboard/checklistMapping";
+
 type EntryResult =
   | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
   | {
@@ -22,15 +26,15 @@ type EntryResult =
       basedOn: string;
       message: string;
       meta?: Record<string, any>;
+      requiredDocuments?: any[];
     };
 
 type NextStep = {
   title: string;
   detail: string;
   urgency: "LOW" | "MEDIUM" | "HIGH";
-  createDoc?: { title: string; type: string };
+  createDoc?: { title: string; type: "eta" | "esta" | "visa" };
   ctaLabel?: string;
-
 };
 
 type ChecklistItem = {
@@ -40,12 +44,72 @@ type ChecklistItem = {
   status: "DONE" | "TODO" | "INFO";
   urgency?: "LOW" | "MEDIUM" | "HIGH";
   link?: string;
-
-  // ✅ new
   canComplete?: boolean;
-  storageKey?: string;
-
 };
+
+type UserDocument = {
+  id: string;
+  title: string;
+  type: string;
+  expiresAt?: string | null;
+};
+
+function parseISODateOnly(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function daysUntil(iso?: string | null): number | null {
+  const d = parseISODateOnly(iso);
+  if (!d) return null;
+  const now = new Date();
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const b = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((b - a) / (1000 * 60 * 60 * 24));
+}
+
+function fmtDate(iso?: string | null): string {
+  const d = parseISODateOnly(iso);
+  if (!d) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+function alertPillClass(days: number) {
+  if (days <= 7) return "bg-red-100 text-red-800 border-red-200";
+  if (days <= 30) return "bg-yellow-100 text-yellow-800 border-yellow-200";
+  return "bg-green-100 text-green-800 border-green-200";
+}
+
+// 🔔 Alert thresholds (single source of truth)
+const ALERT_SOON_DAYS = 30;     // show alert banner / renewal
+const ALERT_URGENT_DAYS = 7;    // urgent (red)
+const DISMISS_DEFAULT_DAYS = 7; // snooze duration
+
+
+const DISMISSED_ALERTS_KEY = "sc:alerts:dismissed:v1";
+
+function todayISO(): string {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
+}
+
+function addDaysISODateOnly(days: number): string {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isDismissed(docId: string, dismissedMap: Record<string, string>): boolean {
+  const until = dismissedMap?.[docId];
+  if (!until) return false;
+  // If until >= today -> dismissed
+  return until >= todayISO();
+}
+
+
 
 function buildChecklist(args: {
   destinationIso2: string;
@@ -55,21 +119,27 @@ function buildChecklist(args: {
 }): ChecklistItem[] {
   const items: ChecklistItem[] = [];
 
-  const destIso2 = (args.destinationIso2 || "").toUpperCase();
-  const passport = (args.passportChoice || "BEST").toUpperCase();
   const res = args.travelResult;
   const stayDays = typeof args.stayDays === "number" ? args.stayDays : 0;
-const longStay = stayDays > 90;
+  const longStay = stayDays > 90;
+
   if (res?.status === "AUTH_REQUIRED") {
     const auth = res?.meta?.auth ? String(res.meta.auth) : "authorization";
+
+    // Stable ids so we can map to documents.type
+    const id =
+      auth === "ESTA" ? "esta" :
+      auth === "ETA" || auth === "eTA" ? "eta" :
+      "auth";
+
     items.push({
-      id: "auth",
+      id,
       title: `Get your ${auth}`,
       detail: res?.message || "You need an authorization before travelling.",
       status: "TODO",
       urgency: "HIGH",
       canComplete: true,
-});
+    });
   } else if (res?.status === "VISA_REQUIRED") {
     items.push({
       id: "visa",
@@ -78,7 +148,7 @@ const longStay = stayDays > 90;
       status: "TODO",
       urgency: "HIGH",
       canComplete: true,
-});
+    });
   } else if (res?.status === "FREE" || res?.status === "VISA_FREE") {
     items.push({
       id: "rule",
@@ -101,11 +171,12 @@ const longStay = stayDays > 90;
     items.push({
       id: "longstay",
       title: "Long stay (90+ days)",
-      detail: "For stays longer than 90 days, you usually need a long-stay visa or residence permit. Short-stay rules (ETA/ESTA/eTA) may not apply.",
+      detail:
+        "For stays longer than 90 days, you usually need a long-stay visa or residence permit. Short-stay rules (ETA/ESTA/eTA) may not apply.",
       status: "INFO",
       urgency: "MEDIUM",
       canComplete: true,
-});
+    });
   }
 
   items.push({
@@ -115,10 +186,11 @@ const longStay = stayDays > 90;
     status: "INFO",
     urgency: "LOW",
     canComplete: true,
-});
+  });
 
   return items;
 }
+
 function pillClass(u: NextStep["urgency"]) {
   switch (u) {
     case "HIGH":
@@ -166,9 +238,10 @@ function computeNextStep(res: EntryResult): NextStep {
   if (res.status === "FREE") {
     return {
       title: "Nothing urgent",
-      detail: res.destination === "SCHENGEN"
-        ? "You have free movement for short stays in Schengen."
-        : "You can travel for short visits without extra authorization.",
+      detail:
+        res.destination === "SCHENGEN"
+          ? "You have free movement for short stays in Schengen."
+          : "You can travel for short visits without extra authorization.",
       urgency: "LOW",
     };
   }
@@ -183,7 +256,6 @@ function computeNextStep(res: EntryResult): NextStep {
     };
   }
 
-  // SCHENGEN only: VISA_FREE can have ETIAS
   if ((res as any).destination === "SCHENGEN" && (res as any).status === "VISA_FREE") {
     if ((res as any).etiasRequired) {
       return {
@@ -215,14 +287,64 @@ function isoToDateInput(iso?: string | null) {
   return d.toISOString().slice(0, 10);
 }
 
-function suggestedExpiryDate(): string {
-  // Suggest: project start date if available
+function readProjectDates() {
+  // Returns YYYY-MM-DD strings (or empty) for start/end if available.
+  let start = "";
+  let end = "";
+
   try {
-    const s = localStorage.getItem("activeProjectStartDate");
-    const v = isoToDateInput(s);
-    if (v) return v;
+    start = isoToDateInput(localStorage.getItem("activeProjectStartDate"));
   } catch {}
-  return "";
+
+  try {
+    end = isoToDateInput(localStorage.getItem("activeProjectEndDate"));
+  } catch {}
+
+  return { start, end };
+}
+
+function addYearsISO(base: Date, years: number): string {
+  const d = new Date(base);
+  d.setFullYear(d.getFullYear() + years);
+  // Normalize to YYYY-MM-DD in local time-ish
+  return d.toISOString().slice(0, 10);
+}
+
+function addDaysISO(base: Date, days: number): string {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function suggestedDateForCreate(docType: "eta" | "esta" | "visa" | string | undefined): string {
+  // We keep it simple (MVP) and conservative:
+  // - ETA: often long validity → suggest +5 years
+  // - ESTA: often shorter → suggest +2 years
+  // - VISA: suggest end of project if known (or start), else +90 days
+  const now = new Date();
+  const t = (docType || "").toLowerCase();
+  const { start, end } = readProjectDates();
+
+  if (t === "eta") return addYearsISO(now, 5);
+  if (t === "esta") return addYearsISO(now, 2);
+
+  if (t === "visa") {
+    if (end) return end;
+    if (start) return start;
+    return addDaysISO(now, 90);
+  }
+
+  // Default fallback: project start date if available, else today
+  if (start) return start;
+  return now.toISOString().slice(0, 10);
+}
+
+function mapCreateDocTypeToBackend(type: "eta" | "esta" | "visa" | string): string {
+  // Backend expects enum-like values (ETA / ESTA / VISA ...)
+  if (type === "eta") return "ETA";
+  if (type === "esta") return "ESTA";
+  if (type === "visa") return "VISA";
+  return String(type).toUpperCase();
 }
 
 export function NextStepsCard({
@@ -234,92 +356,110 @@ export function NextStepsCard({
   refreshKey: number;
   onDocumentCreated?: () => void;
 }) {
-
-  
-
   const [mounted, setMounted] = useState(false);
-  
 
-  // ✅ checklist completion state (persisted)
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [alertsCenterOpen, setAlertsCenterOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [docTitle, setDocTitle] = useState("");
+  const [docExpires, setDocExpires] = useState("");
+
+  // Manual completion map (fallback)
   const [doneMap, setDoneMap] = useState<Record<string, boolean>>({});
 
-const doneStorageKey = useMemo(() => {
-    // Unique per "active project context" (destination + passport + stay length)
-    if (!mounted) return "sc:done:pending";
+  // 📄 Documents + Alerts (Step 3)
+  const [docs, setDocs] = useState<UserDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsErr, setDocsErr] = useState<string | null>(null);
+  const [docsRefreshKey, setDocsRefreshKey] = useState(0);
 
-    let dest = "NA";
-    let passport = "BEST";
-    let stay = 0;
+  // 🔕 Dismissed alerts (per doc, local-only)
+  const [dismissedMap, setDismissedMap] = useState<Record<string, string>>({});
 
-    try {
-      dest =
-        (localStorage.getItem("activeProjectDestinationIso2") || "NA")
-          .toString()
-          .trim()
-          .toUpperCase() || "NA";
-    } catch {}
+  const [doneSourceMap, setDoneSourceMap] = useState<Record<string, "manual" | "created">>({});
 
-    try {
-      passport =
-        (localStorage.getItem("activePassport") || "BEST")
-          .toString()
-          .trim()
-          .toUpperCase() || "BEST";
-    } catch {}
 
-    try {
-      const s = localStorage.getItem("activeProjectStartDate") || "";
-      const e = localStorage.getItem("activeProjectEndDate") || "";
-      const sd = new Date(s);
-      const ed = new Date(e);
-      if (!Number.isNaN(sd.getTime()) && !Number.isNaN(ed.getTime())) {
-        stay = Math.max(0, Math.round((ed.getTime() - sd.getTime()) / (1000 * 60 * 60 * 24)));
-      }
-    } catch {}
+  // Documents types fetched from API (drives auto-done)
+  const [docTypes, setDocTypes] = useState<Set<string>>(new Set());
 
-    return `sc:done:${dest}:${passport}:${stay}`;
-  }, [mounted, refreshKey]);  
-
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      const raw = localStorage.getItem(doneStorageKey);
-      setDoneMap(raw ? JSON.parse(raw) : {});
-    } catch {
-      setDoneMap({});
-    }
-  }, [mounted, doneStorageKey]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    try {
-      localStorage.setItem(doneStorageKey, JSON.stringify(doneMap));
-    } catch {}
-  }, [mounted, doneStorageKey, doneMap]);
-const checklistKey = useMemo(() => {
+  const checklistKey = useMemo(() => {
     if (!mounted) return "checklist:pending";
     const dest = (() => {
-      try { return (localStorage.getItem("activeProjectDestinationIso2") || "").toUpperCase(); } catch { return ""; }
+      try {
+        return (localStorage.getItem("activeProjectDestinationIso2") || "").toUpperCase();
+      } catch {
+        return "";
+      }
     })();
     const passport = (() => {
-      try { return (localStorage.getItem("activeProjectPassportChoice") || "BEST").toUpperCase(); } catch { return "BEST"; }
+      try {
+        // Note: your code uses both activePassport and activeProjectPassportChoice in places.
+        // We'll keep the one used by your requests engine.
+        return (localStorage.getItem("activePassport") || "BEST").toUpperCase();
+      } catch {
+        return "BEST";
+      }
     })();
     const purpose = (() => {
-      try { return (localStorage.getItem("activeProjectPurpose") || "").toLowerCase(); } catch { return ""; }
+      try {
+        return (localStorage.getItem("activeProjectPurpose") || "").toLowerCase();
+      } catch {
+        return "";
+      }
     })();
-    return `checklist:v1:${dest}:${passport}:${purpose}`;
+    const stayBucket = (() => {
+      try {
+        return (localStorage.getItem("activeProjectStayBucket") || "SHORT").toUpperCase();
+      } catch {
+        return "SHORT";
+      }
+    })();
+    return `checklist:v2:${dest}:${passport}:${purpose}:${stayBucket}`;
+  }, [mounted, refreshKey]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+
+  // Load dismissed alerts map (localStorage)
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const raw = localStorage.getItem(DISMISSED_ALERTS_KEY);
+      setDismissedMap(raw ? JSON.parse(raw) : {});
+    } catch {
+      setDismissedMap({});
+    }
   }, [mounted]);
+
   useEffect(() => {
     if (!mounted) return;
     try {
       const raw = localStorage.getItem(checklistKey);
+      const src = localStorage.getItem(checklistKey + ":source");
       setDoneMap(raw ? JSON.parse(raw) : {});
+      setDoneSourceMap(src ? JSON.parse(src) : {});
     } catch {
       setDoneMap({});
+      setDoneSourceMap({});
     }
   }, [mounted, checklistKey]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(checklistKey, JSON.stringify(doneMap));
+      localStorage.setItem(checklistKey + ":source", JSON.stringify(doneSourceMap));
+    } catch {}
+  }, [mounted, checklistKey, doneMap, doneSourceMap]);
+
   function toggleDone(itemId: string) {
+    setDoneSourceMap((prev) => ({ ...prev, [itemId]: "manual" }));
+
     setDoneMap((prev) => {
       const next = { ...prev, [itemId]: !prev[itemId] };
       try {
@@ -329,13 +469,11 @@ const checklistKey = useMemo(() => {
     });
   }
 
-
   const [destIso2, setDestIso2] = useState<string>("FR");
   const [passportChoice, setPassportChoice] = useState<string>("BEST");
   const [stayDays, setStayDays] = useState<number>(0);
 
   useEffect(() => {
-    setMounted(true);
     try {
       const d = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
       const psp = (localStorage.getItem("activePassport") || "BEST").toString().trim().toUpperCase();
@@ -360,8 +498,42 @@ const checklistKey = useMemo(() => {
   }, []);
 
   const [data, setData] = useState<EntryResult | null>(null);
+  const [step, setStep] = useState<NextStep | null>(null);
 
-  const checklist = useMemo(() => {
+
+  // Load user documents to compute upcoming expiry alerts
+  useEffect(() => {
+    const run = async () => {
+      if (!mounted) return;
+      try {
+        setDocsLoading(true);
+        setDocsErr(null);
+
+        const res = await authFetch("/api/v1/documents", { method: "GET" });
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || `Failed to fetch documents (${res.status})`);
+        }
+        const json = await res.json();
+        const arr = Array.isArray(json) ? json : Array.isArray((json as any)?.items) ? (json as any).items : [];
+        setDocs(arr as UserDocument[]);
+      } catch (e: any) {
+        setDocsErr(e?.message ?? "Failed to load documents");
+        setDocs([]);
+      } finally {
+        setDocsLoading(false);
+      }
+    };
+
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, refreshKey, docsRefreshKey, authFetch]);
+
+  const requiredDocsFromResult = Array.isArray((data as any)?.requiredDocuments)
+    ? (((data as any).requiredDocuments as any[]) ?? [])
+    : [];
+
+  const baseChecklist = useMemo(() => {
     if (!mounted) return [];
     return buildChecklist({
       destinationIso2: destIso2,
@@ -371,112 +543,218 @@ const checklistKey = useMemo(() => {
     });
   }, [mounted, destIso2, passportChoice, data, stayDays]);
 
-  const nextAction = useMemo(() => {
-    // Next actionable TODO (not already done)
-    const first = (checklist || []).find((x: any) => x?.status === "TODO" && !doneMap?.[x.id]);
-    return first || null;
-  }, [checklist, doneMap]);
+  const checklist = useMemo(() => {
+    if (!mounted) return [];
+    const _reqDocs = requiredDocsFromResult;
+    if (!_reqDocs.length) return baseChecklist;
 
+    const longStayItems = _reqDocs.map((d: any) => ({
+      id: `reqdoc:${String(d?.id ?? d?.code ?? d?.title ?? d?.name ?? "doc")}`,
+      title: String(d?.title ?? d?.name ?? "Required document"),
+      detail: String(d?.detail ?? d?.description ?? "Add this document to your vault."),
+      status: "TODO",
+      canComplete: true,
+    })) as any[];
 
-  const [step, setStep] = useState<NextStep | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [open, setOpen] = useState(false);
-  const [docTitle, setDocTitle] = useState("");
-  const [docExpires, setDocExpires] = useState(""); // yyyy-mm-dd
-  const [creating, setCreating] = useState(false);
-
-  const canCreate = Boolean(step?.createDoc);
-
-  const urgencyLabel = useMemo(() => {
-    if (!step) return "";
-    return step.urgency === "HIGH" ? "High priority" : step.urgency === "MEDIUM" ? "Recommended" : "All good";
-  }, [step]);
+    return ([...longStayItems, ...(baseChecklist as any)] as any);
+  }, [mounted, baseChecklist, requiredDocsFromResult]);
 
   useEffect(() => {
-    async function load() {
+    const run = async () => {
+      if (!mounted) return;
       try {
         setLoading(true);
         setErr(null);
 
-        let passportChoice = "BEST";
+        let passportChoiceLocal = "BEST";
         try {
-          passportChoice =
-            (localStorage.getItem("activePassport") || "BEST").toString().trim().toUpperCase() || "BEST";
+          passportChoiceLocal = (localStorage.getItem("activePassport") || "BEST").toString().trim().toUpperCase() || "BEST";
         } catch {}
 
-        
-
-        let destIso2 = "FR";
+        let destIso2Local = "FR";
         try {
-          destIso2 = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
+          destIso2Local = (localStorage.getItem("activeProjectDestinationIso2") || "FR").toString().trim().toUpperCase();
         } catch {}
-// Fetch active project to know the selected destination
-        let destinationIso2 = "SCHENGEN";
-        const res = await authFetch(
-          `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2)}&passport=${encodeURIComponent(passportChoice)}`
+
+        const stayBucket = (() => {
+          try {
+            return localStorage.getItem("activeProjectStayBucket") || "SHORT";
+          } catch {
+            return "SHORT";
+          }
+        })();
+
+        const travelPromise = authFetch(
+          `/api/v1/requirements/travel?destination=${iso2ToTravelDestination(destIso2Local)}&passport=${encodeURIComponent(
+            passportChoiceLocal
+          )}&stayBucket=${encodeURIComponent(stayBucket)}`
         );
 
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt || `Failed (${res.status})`);
+        const docsPromise = fetchUserDocumentsWith(authFetch);
+
+        const [travelRes, docs] = await Promise.all([travelPromise, docsPromise]);
+
+        if (!travelRes.ok) {
+          const txt = await travelRes.text();
+          throw new Error(txt || `Failed (${travelRes.status})`);
         }
 
-        const json = (await res.json()) as EntryResult;
+        const json = (await travelRes.json()) as EntryResult;
+
         setData(json);
         setStep(computeNextStep(json));
+
+        setDocTypes(documentsTypeSet(docs));
       } catch (e: any) {
         setErr(e?.message ?? "Failed to load next steps");
         setData(null);
         setStep(null);
+        setDocTypes(new Set());
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    load();
-  }, [refreshKey, authFetch]);
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authFetch, mounted, destIso2, passportChoice, stayDays, refreshKey]);  // Upcoming expiry alerts (computed from docs)
+  const upcoming = useMemo(() => {
+    const list = (docs ?? [])
+      .map((d) => ({ doc: d, days: daysUntil(d.expiresAt) }))
+      .filter((x) => typeof x.days === "number" && (x.days as number) >= 0) as { doc: UserDocument; days: number }[];
+    list.sort((a, b) => a.days - b.days);
+    return list;
+  }, [docs]);
 
-  function openCreateModal() {
-    if (!step?.createDoc) return;
-    setDocTitle(step.createDoc.title);
-    setDocExpires(suggestedExpiryDate());
-    setOpen(true);
-  }
+  const expiringSoon = useMemo(() => upcoming.filter((x) => x.days <= ALERT_SOON_DAYS && !isDismissed(x.doc.id, dismissedMap)), [upcoming, dismissedMap]);
+  const expiringUrgent = useMemo(() => upcoming.filter((x) => x.days <= ALERT_URGENT_DAYS && !isDismissed(x.doc.id, dismissedMap)), [upcoming, dismissedMap]);
 
-  async function confirmCreate() {
-    if (!step?.createDoc) return;
+  const renewalStep: NextStep | null = useMemo(() => {
+    if (!expiringSoon.length) return null;
+    const top = expiringSoon[0];
+    return {
+      title: `Renew "${top.doc.title}"`,
+      detail: `This document expires in ${top.days} day(s) (${fmtDate(top.doc.expiresAt)}). Update it in your Document vault.`,
+      urgency: top.days <= 7 ? "HIGH" : "MEDIUM",
+    };
+  }, [expiringSoon]);
 
-    if (!docExpires) {
-      alert("Please set an expiration date (or a target deadline).");
-      return;
-    }
+  const displayStep = renewalStep ?? step;
 
-    setCreating(true);
+
+
+  const urgencyLabel =
+    displayStep?.urgency === "HIGH" ? "High" :
+    displayStep?.urgency === "MEDIUM" ? "Medium" :
+    displayStep?.urgency === "LOW" ? "Low" :
+    "Info";
+
+  const canCreate = !!displayStep && !(displayStep?.createDoc?.type && doneMap[displayStep.createDoc.type.toLowerCase()]);
+
+  const openCreateModal = () => {
+    setErr(null);
+    setDocTitle(step?.createDoc?.title ?? "");
+    setDocExpires(suggestedDateForCreate(displayStep?.createDoc?.type));
+    setCreateOpen(true);
+  };
+
+  const confirmCreate = async () => {
     try {
-      const expiresAt = new Date(docExpires + "T00:00:00.000Z").toISOString();
+      if (!step?.createDoc?.type) {
+        setErr("No document type inferred for this step.");
+        return;
+      }
+      if (!docTitle.trim()) {
+        setErr("Please enter a title.");
+        return;
+      }
+      if (!docExpires.trim()) {
+        setErr("Please enter an expiration/deadline date.");
+        return;
+      }
+
+      setCreating(true);
+      setErr(null);
 
       const res = await authFetch("/api/v1/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: docTitle || step.createDoc.title,
-          type: step.createDoc.type,
-          expiresAt,
+          title: docTitle.trim(),
+          type: mapCreateDocTypeToBackend(step.createDoc.type),
+          expiresAt: docExpires.trim(),
         }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || ("Failed (" + String(res.status) + ")"));
+      }
 
-      setOpen(false);
+      // Refresh docs types so checklist auto-updates immediately
+      try {
+        const docs = await fetchUserDocumentsWith(authFetch);
+        setDocTypes(documentsTypeSet(docs));
+      } catch {}
+
+      setDocTitle("");
+      setDocExpires("");
+      setCreateOpen(false);
+      setDocsRefreshKey((x) => x + 1);
+
+      // Mark corresponding checklist item as done (created via StudyComply)
+      if (step?.createDoc?.type) {
+        const id = step.createDoc.type.toLowerCase();
+        setDoneMap((prev) => ({ ...prev, [id]: true }));
+        setDoneSourceMap((prev) => ({ ...prev, [id]: "created" }));
+      }
+
       onDocumentCreated?.();
     } catch (e: any) {
-      alert(e?.message ?? "Failed to create document");
+      setErr((e && (e.message || e.toString())) || "Failed to create document");
     } finally {
       setCreating(false);
     }
+  };
+
+  // Helper: compute "done" with auto-done for known checklist ids, else fallback manual
+  const resolvedDone = (itemId: string): boolean => {
+    const id = itemId as ChecklistItemId;
+    // only apply auto-done for ids we map (eta/esta/visa/...); otherwise fallback to doneMap
+    if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
+      return isChecklistItemDone(id, docTypes, doneMap);
+    }
+    return !!doneMap?.[itemId];
+  };
+
+  const resolvedAutoDone = (itemId: string): boolean => {
+    const id = itemId as ChecklistItemId;
+    if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
+      return isChecklistItemAutoDone(id, docTypes);
+    }
+    return false;
+  };  // Persist dismissed alerts map
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      localStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify(dismissedMap));
+    } catch {}
+  }, [mounted, dismissedMap]);
+
+  function dismissAlert(docId: string, days: number) {
+    const until = addDaysISODateOnly(days);
+    setDismissedMap((prev) => ({ ...prev, [docId]: until }));
   }
+
+  function undoDismiss(docId: string) {
+    setDismissedMap((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[docId];
+      return next;
+    });
+  }
+
+
 
   return (
     <div className="rounded-2xl border bg-white p-5">
@@ -484,42 +762,100 @@ const checklistKey = useMemo(() => {
         <div>
           <h2 className="text-lg font-semibold">What you need next</h2>
           <p className="text-sm text-gray-600">Based on your selected passport and destination rules.</p>
+        
+      {expiringSoon.length > 0 && (
+        <div className="mt-4 rounded-2xl border bg-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">⚠️ {expiringSoon.length} document(s) expiring within {ALERT_SOON_DAYS} days</p>
+              <p className="mt-1 text-sm text-gray-700">
+                Next: <span className="font-medium">{expiringSoon[0].doc.title}</span> —{" "}
+                <span className={"inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium " + alertPillClass(expiringSoon[0].days)}>
+                  {expiringSoon[0].days} days
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-gray-500">Update it in your Document vault below.</p>
+            </div>
+            <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + alertPillClass(expiringSoon[0].days)}>
+              {expiringSoon[0].days <= ALERT_URGENT_DAYS ? "Urgent" : "Soon"}
+            </span>
+          </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => dismissAlert(expiringSoon[0].doc.id, DISMISS_DEFAULT_DAYS)}
+                className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+              >
+                Dismiss 7d
+              </button>
+              <button
+                type="button"
+                onClick={() => undoDismiss(expiringSoon[0].doc.id)}
+                className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+              >
+                Undo
+              </button>
+            </div>
         </div>
+      )}
 
-        {step ? (
-          <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + pillClass(step.urgency)}>
-            {urgencyLabel}
-          </span>
-        ) : null}
+
+</div>
+
+        {displayStep ? (
+          <div className="flex items-center gap-2">
+            <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + pillClass(displayStep.urgency)}>
+              {urgencyLabel}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setAlertsCenterOpen(true)}
+              className="inline-flex items-center rounded-xl border px-3 py-1 text-xs font-medium hover:bg-gray-50"
+            >
+              View alerts
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAlertsCenterOpen(true)}
+            className="inline-flex items-center rounded-xl border px-3 py-1 text-xs font-medium hover:bg-gray-50"
+          >
+            View alerts
+          </button>
+        )}
       </div>
 
       {loading ? (
         <p className="mt-3 text-sm text-gray-600">Loading…</p>
       ) : err ? (
         <p className="mt-3 text-sm text-red-700">{err}</p>
-      ) : !step || !data ? (
+      ) : !displayStep ? (
         <p className="mt-3 text-sm text-gray-600">No data.</p>
       ) : (
         <div className="mt-4 space-y-2">
-          <p className="text-sm font-medium">{step.title}</p>
-          <p className="text-sm text-gray-700">{step.detail}</p>
+          <p className="text-sm font-medium">{displayStep.title}</p>
+          <p className="text-sm text-gray-700">{displayStep.detail}</p>
 
-          <p className="text-xs text-gray-500">
-            Based on passport: <span className="font-mono">{data.basedOn}</span>
-          </p>
+          {!renewalStep && data ? (
+            <p className="text-xs text-gray-500">
+              Based on passport: <span className="font-mono">{data.basedOn}</span>
+            </p>
+          ) : null}
 
           {canCreate ? (
             <button
               onClick={openCreateModal}
               className="mt-3 inline-flex rounded-xl bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
             >
-              {step.ctaLabel ?? "Create document"}
+              {displayStep.ctaLabel ?? "Create document"}
             </button>
           ) : null}
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Create a document</DialogTitle>
@@ -549,7 +885,7 @@ const checklistKey = useMemo(() => {
                 onChange={(e) => setDocExpires(e.target.value)}
               />
               <p className="mt-1 text-xs text-gray-500">
-                Tip: we suggest your project start date if available.
+                Tip: we suggest a date based on the document type (and your project dates if available).
               </p>
             </div>
 
@@ -564,7 +900,7 @@ const checklistKey = useMemo(() => {
 
           <DialogFooter>
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => setCreateOpen(false)}
               className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
               disabled={creating}
             >
@@ -580,8 +916,131 @@ const checklistKey = useMemo(() => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    
-      
+
+
+      {/* Alerts Center (Step 6) */}
+      <Dialog open={alertsCenterOpen} onOpenChange={setAlertsCenterOpen}>
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>Alerts</DialogTitle>
+            <DialogDescription>
+              Upcoming expirations from your document vault. You can dismiss alerts temporarily.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 space-y-4">
+            <div className="rounded-2xl border bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">
+                    Active alerts (≤ {ALERT_SOON_DAYS} days)
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Urgent: ≤ {ALERT_URGENT_DAYS} days. Dismiss hides alerts until the chosen date.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {expiringUrgent.length > 0 ? (
+                    <span className="inline-flex items-center rounded-full border bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                      {expiringUrgent.length} urgent
+                    </span>
+                  ) : null}
+                  {expiringSoon.length > 0 ? (
+                    <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + alertPillClass(expiringSoon[0].days)}>
+                      {expiringSoon.length} soon
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {docsLoading ? (
+                <p className="mt-3 text-sm text-gray-600">Loading documents…</p>
+              ) : docsErr ? (
+                <p className="mt-3 text-sm text-red-700">{docsErr}</p>
+              ) : expiringSoon.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-700">No active alerts right now.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {expiringSoon.slice(0, 20).map((x) => (
+                    <li key={x.doc.id} className="flex items-center justify-between gap-3 rounded-xl border bg-gray-50 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{x.doc.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          Expires: {fmtDate(x.doc.expiresAt)}
+                        </p>
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + alertPillClass(x.days)}>
+                          {x.days} days
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => dismissAlert(x.doc.id, DISMISS_DEFAULT_DAYS)}
+                          className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+                        >
+                          Dismiss {DISMISS_DEFAULT_DAYS}d
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => undoDismiss(x.doc.id)}
+                          className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="rounded-2xl border bg-white p-4">
+              <p className="text-sm font-medium">Dismissed</p>
+              <p className="mt-1 text-xs text-gray-500">
+                These alerts are hidden until their dismiss-until date.
+              </p>
+
+              {Object.keys(dismissedMap || {}).length === 0 ? (
+                <p className="mt-3 text-sm text-gray-700">No dismissed alerts.</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {Object.entries(dismissedMap).slice(0, 30).map(([docId, until]) => (
+                    <li key={docId} className="flex items-center justify-between gap-3 rounded-xl border bg-gray-50 p-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{docId}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Dismissed until: {until}</p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => undoDismiss(docId)}
+                        className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+                      >
+                        Undo
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setAlertsCenterOpen(false)}
+              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+            >
+              Close
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {mounted && checklist.length > 0 && (
         <details className="mt-4 rounded-2xl border bg-white p-5">
           <summary className="cursor-pointer select-none text-sm font-medium">
@@ -590,29 +1049,106 @@ const checklistKey = useMemo(() => {
           </summary>
 
           <div className="mt-4">
-          <ul className="mt-4 space-y-3">
-            {checklist.filter((it) => it.id !== "passport" && it.id !== "destination").map((it) => (<li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${doneMap[it.id] ? "opacity-70" : ""}`}>
+
+            {(expiringSoon.length > 0 || docsLoading || docsErr) && (
+              <div className="rounded-2xl border bg-white p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className={`font-medium ${doneMap[it.id] ? "line-through" : ""}`}>{it.title}</p>
-                    <p className={`mt-1 text-sm text-gray-600 ${doneMap[it.id] ? "line-through" : ""}`} suppressHydrationWarning>{it.detail}</p>
+                    <p className="text-sm font-medium">Upcoming expirations</p>
+                    <p className="mt-1 text-xs text-gray-500">We highlight documents expiring soon. No auto-uncheck.</p>
                   </div>
-                
-                  <button
-                    type="button"
-                    onClick={() => toggleDone(it.id)}
-                    className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${doneMap[it.id] ? "bg-white" : "bg-black text-white"}`}
-                  >
-                    {doneMap[it.id] ? "Undo" : "Done"}
-                  </button>
-</div>
-              </li>
-            ))}
-          </ul>
-        
+                  {expiringUrgent.length > 0 ? (
+                    <span className="inline-flex items-center rounded-full border bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                      {expiringUrgent.length} urgent
+                    </span>
+                  ) : null}
+                </div>
+
+                {docsLoading ? (
+                  <p className="mt-2 text-sm text-gray-600">Loading documents…</p>
+                ) : docsErr ? (
+                  <p className="mt-2 text-sm text-red-700">{docsErr}</p>
+                ) : expiringSoon.length === 0 ? (
+                  <p className="mt-2 text-sm text-gray-600">No upcoming expirations within 30 days.</p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {expiringSoon.slice(0, 3).map((x) => (
+                      <li key={x.doc.id} className="flex items-center justify-between gap-3 rounded-xl border bg-gray-50 p-3">
+                        <div>
+                          <p className="text-sm font-medium">{x.doc.title}</p>
+                          <p className="text-xs text-gray-500">Expires: {fmtDate(x.doc.expiresAt)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                        <span className={"inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium " + alertPillClass(x.days)}>
+                          {x.days} days
+                        </span>
+                        {isDismissed(x.doc.id, dismissedMap) ? (
+                          <button
+                            type="button"
+                            onClick={() => undoDismiss(x.doc.id)}
+                            className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+                          >
+                            Undo
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => dismissAlert(x.doc.id, DISMISS_DEFAULT_DAYS)}
+                            className="rounded-xl border px-3 py-2 text-xs hover:bg-gray-50"
+                          >
+                            Dismiss 7d
+                          </button>
+                        )}
+                      </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+
+            <ul className="mt-4 space-y-3">
+              {checklist
+                .filter((it: any) => it.id !== "passport" && it.id !== "destination")
+                .map((it: any) => {
+                  const done = resolvedDone(it.id);
+                  const autoDone = resolvedAutoDone(it.id);
+
+                  return (
+                    <li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${done ? "opacity-70" : ""}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className={`font-medium ${done ? "line-through" : ""}`}>{it.title}</p>
+                          <p className={`mt-1 text-sm text-gray-600 ${done ? "line-through" : ""}`} suppressHydrationWarning>
+                            {it.detail}
+                          </p>
+
+                          {done && doneSourceMap[it.id] === "created" ? (
+                            <p className="mt-2 text-xs text-gray-500">Created via StudyComply.</p>
+                          ) : done && doneSourceMap[it.id] === "manual" ? (
+                            <p className="mt-2 text-xs text-gray-500">Marked as done manually.</p>
+                          ) : null}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleDone(it.id)}
+                          disabled={autoDone}
+                          className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${
+                            done ? "bg-white" : "bg-black text-white"
+                          } ${autoDone ? "cursor-not-allowed opacity-60" : ""}`}
+                        >
+                          {autoDone ? "Done" : done ? "Undo" : "Done"}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+            </ul>
           </div>
         </details>
       )}
-</div>
+    </div>
   );
 }
