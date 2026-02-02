@@ -3,7 +3,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RequirementsService } from './requirements.service';
 import { PassportsService } from "../passports/passports.service";
 import { evaluateEntry } from "./travel/engine";
-import type { DestinationZone } from "./travel/types";
+import type { DestinationZone, StayBucket } from "./travel/types";
 import { resolveUK, resolveUSA, resolveCANADA } from "src/rules/travel";
 
 @Controller('api/v1/requirements')
@@ -18,7 +18,7 @@ export class RequirementsController {
     return this.reqs.compute(req.user.sub);
   }
   @Get("travel")
-  async travel(@Req() req: any, @Query("destination") destination = "SCHENGEN", @Query("passport") passport = "BEST") {
+  async travel(@Req() req: any, @Query("destination") destination = "SCHENGEN", @Query("passport") passport = "BEST", @Query("stayBucket") stayBucket = "SHORT") {
     const zone = destination.toString().toUpperCase() as DestinationZone;
 
     // assumes auth guard attaches req.user
@@ -28,7 +28,8 @@ export class RequirementsController {
     const codesAll = passports.map((p: any) => p.countryCode);
     const forced = (passport ?? "BEST").toString().trim().toUpperCase();
     const codes = forced && forced !== "BEST" ? [forced] : codesAll;
-    return evaluateEntry(zone, codes);
+    const bucket = (stayBucket ?? "SHORT").toString().trim().toUpperCase() as StayBucket;
+    return evaluateEntry(zone, codes, bucket);
   }
 
 }

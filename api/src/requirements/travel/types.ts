@@ -1,4 +1,24 @@
-export type DestinationZone = "SCHENGEN";
+export type RequiredDocument = {
+  id: string;
+  code?: string;
+  title: string;
+  detail?: string;
+};
+
+export type DestinationZone = "SCHENGEN" | "UK" | "USA" | "CANADA";
+
+export type StayBucket = "SHORT" | "SEMESTER" | "YEAR" | "MULTIYEAR";
+
+export type RequiredDoc = {
+  id: string;
+  title: string;
+  detail: string;
+  renewable?: boolean;
+  validityMonths?: number;
+  whenToRenewMonthsBefore?: number;
+  links?: { label: string; url: string }[];
+};
+
 
 export type EntryResult =
   | {

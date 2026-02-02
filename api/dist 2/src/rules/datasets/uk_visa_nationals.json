@@ -1,0 +1,11 @@
+{
+    "updatedAt": "2026-01-02",
+    "source": "GOV.UK — Immigration Rules Appendix Visitor: Visa national list",
+    "iso2": [
+        "AF", "AL", "DZ", "AO", "AM", "AZ", "BD", "BY", "BJ", "BT", "BO", "BA", "BW", "BF", "BI", "KH", "CM", "CV", "CF", "TD", "CN", "CO", "KM", "CG", "CI", "CU", "CD",
+        "DJ", "DM", "DO", "EC", "EG", "SV", "GQ", "ER", "SZ", "ET", "FJ", "GA", "GM", "GE", "GH", "GN", "GW", "HT", "HN", "IN", "ID", "IR", "IQ", "JM", "JO", "KZ", "KE",
+        "KP", "XK", "KG", "LA", "LB", "LS", "LR", "LY", "MG", "MW", "ML", "MR", "MD", "MN", "ME", "MA", "MZ", "MM", "NA", "NR", "NP", "NE", "NG", "MK", "PK", "PS", "PH",
+        "RU", "RW", "ST", "SN", "RS", "SL", "SO", "ZA", "SS", "LK", "SD", "SR", "SY", "TJ", "TZ", "TH", "TL", "TG", "TT", "TN", "TR", "TM", "UG", "UA", "UZ", "VU", "VE",
+        "VN", "YE", "ZM", "ZW"
+    ]
+}

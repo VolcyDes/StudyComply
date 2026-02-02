@@ -1,7 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
+
+function scPersistStayBucket(bucket: string) {
+  try { localStorage.setItem("activeProjectStayBucket", String(bucket)); } catch {}
+}
+function scReadStayBucket(): string | null {
+  try { return localStorage.getItem("activeProjectStayBucket"); } catch { return null; }
+}
+
+
+function persistStayBucket(bucket: string) {
+  try { localStorage.setItem("activeProjectStayBucket", String(bucket)); } catch {}
+}
+function readStayBucket(): string | null {
+  try { return localStorage.getItem("activeProjectStayBucket"); } catch { return null; }
+}
+
 
 import { isSupportedDestinationIso2, iso2ToTravelDestination } from "@/lib/travelDestination";
 import { stayDaysToBucket, stayBucketLabel } from "@/lib/stayBucket";
@@ -38,7 +54,9 @@ export default function ProjectSection({
   onChanged?: () => void;
 }) {
   const [loading, setLoading] = useState(true);
-  const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
+  
+  const [mounted, setMounted] = useState(false);
+const [countries, setCountries] = useState<{ code: string; name: string }[]>([]);
 
   const supportedCountries = (countries ?? [])
     .map((c: any) => ({
@@ -68,8 +86,25 @@ const [purpose, setPurpose] = useState("exchange");
 
   const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";
 
-  const [stayMode, setStayMode] = useState<StayMode>("SHORT");
-  const [customDatesOpen, setCustomDatesOpen] = useState(false);
+  const [stayMode, setStayMode] = useState("SHORT" as any);
+  
+
+  
+
+  // STAY_RESTORE_EFFECT_HYDRATIONSAFE_V1
+  const stayRestoreOnce = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (stayRestoreOnce.current) return;
+    stayRestoreOnce.current = true;
+
+    try {
+      const stored = localStorage.getItem("activeProjectStayBucket");
+      if (stored) setStayMode(stored as any);
+    } catch {}
+  }, []);
+const [customDatesOpen, setCustomDatesOpen] = useState(false);
 
   function addDays(dateInput: string, days: number): string {
     const d = new Date(dateInput + "T00:00:00Z");
@@ -98,6 +133,7 @@ const [purpose, setPurpose] = useState("exchange");
   const stayDays = stayDaysFromInputs(startDate, effectiveEndDate);
   const stayBucket = stayMode === "CUSTOM" ? stayDaysToBucket(stayDays) : (stayMode as any);
 useEffect(() => {
+  // RESTORE_STAY_BUCKET_ON_MOUNT_V7
     try { try { localStorage.setItem("activeProjectStayMode", stayMode); } catch {}
     localStorage.setItem("activeProjectStayBucket", stayBucket); } catch {}
   }, [stayMode, stayBucket]);
@@ -140,7 +176,7 @@ useEffect(() => {
       try {
         const m = (localStorage.getItem("activeProjectStayMode") || "").toUpperCase();
         if (m === "SHORT" || m === "SEMESTER" || m === "YEAR" || m === "MULTIYEAR" || m === "CUSTOM") {
-          setStayMode(m as any);
+          if (m && m !== stayMode) setStayMode(m as any);
         }
       } catch {}
       const res = await authFetch("/api/v1/projects/active");
@@ -268,7 +304,11 @@ useEffect(() => {
   value={destinationCountry}
   onChange={(v) => {
     setDestinationCountry(v);
-    try { localStorage.setItem("activeProjectDestinationIso2", (v || "").toString().toUpperCase()); } catch {}
+    try {       // FORCE_WRITE_STAY_BUCKET_V2
+    // removed: do not overwrite activeProjectStayBucket from computed stayMode on reload
+      // SC_FORCE_WRITE_STAY_BUCKET_ON_UPDATE_V1
+    // removed: do not overwrite activeProjectStayBucket from computed stayMode on reload
+localStorage.setItem("activeProjectDestinationIso2", (v || "").toString().toUpperCase()); } catch {}
   }}
   placeholder="Choose a destination…"
   triggerClassName="h-10 rounded-xl border px-3 text-sm"
@@ -300,10 +340,10 @@ useEffect(() => {
             onChange={(e) => {
               const v = e.target.value as any;
               setStayMode(v);
+              try { localStorage.setItem("activeProjectStayBucket", String(v)); } catch {}
               if (v === "CUSTOM") setCustomDatesOpen(true);
               else setCustomDatesOpen(false);
-}}
-          >
+            }}>
             <option value="SHORT">Short stay (≤ 90 days)</option>
             <option value="SEMESTER">Semester (~ 4–6 months)</option>
             <option value="YEAR">Academic year (~ 8–12 months)</option>
@@ -391,13 +431,13 @@ useEffect(() => {
           <div className="md:col-span-1 min-w-0 space-y-1">
             <label className="text-sm font-medium">Duration</label>
             <div className="h-10 w-full rounded-xl border px-3 text-sm flex items-center bg-gray-50">
-              {stayMode === "SHORT"
+              {!mounted ? "…" : (stayMode === "SHORT"
                 ? "≤ 90 days"
                 : stayMode === "SEMESTER"
                 ? "~ 180 days (4–6 months)"
                 : stayMode === "YEAR"
                 ? "~ 365 days (8–12 months)"
-                : "~ multi-year (2+ years)"}
+                : "~ multi-year (2+ years)")}
             </div>
             <p className="text-xs text-gray-500">
               Choose “Custom dates…” if you want to enter exact dates.

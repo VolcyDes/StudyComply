@@ -4,6 +4,14 @@ import { iso2ToTravelDestination } from "@/lib/travelDestination";
 import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
+function scPersistStayBucket(bucket: string) {
+// removed: NextStepsCard should not write activeProjectStayBucket
+}
+function scReadStayBucket(): string | null {
+  try { return localStorage.getItem("activeProjectStayBucket"); } catch { return null; }
+}
+
+
 import { fetchUserDocumentsWith, documentsTypeSet } from "@/lib/documents/api";
 import { isChecklistItemDone, isChecklistItemAutoDone } from "@/lib/dashboard/checklistDone";
 import type { ChecklistItemId } from "@/lib/dashboard/checklistMapping";
@@ -33,7 +41,7 @@ type NextStep = {
   title: string;
   detail: string;
   urgency: "LOW" | "MEDIUM" | "HIGH";
-  createDoc?: { title: string; type: "eta" | "esta" | "visa" };
+  createDoc?: { title: string; type: "eta" | "esta" | "visa" | "study_permit" };
   ctaLabel?: string;
 };
 
@@ -202,8 +210,33 @@ function pillClass(u: NextStep["urgency"]) {
   }
 }
 
-function computeNextStep(res: EntryResult): NextStep {
+function computeNextStep(res: EntryResult, stayBucket?: string): NextStep {
   const auth = (res as any)?.meta?.auth as string | undefined;
+  // CANADA_LONG_STAY_NEXTSTEP_V1
+  if ((res as any)?.destination === "CANADA" && (res as any)?.meta?.longStay) {
+    return {
+      title: "Apply for a Study Permit",
+      detail:
+        "For long stays in Canada, the main requirement is typically a Study Permit. An eTA may be needed only to board a flight (entry by air).",
+      urgency: "HIGH",
+      createDoc: { title: "Study Permit", type: "study_permit" },
+      ctaLabel: "Create Study Permit document",
+    };
+  }
+
+  // CANADA_STUDY_PERMIT_OVERRIDE_V1
+  // If long stay, the primary action is Study Permit (eTA is entry-by-air only).
+  if ((res as any)?.destination === "CANADA" && stayBucket && stayBucket !== "SHORT") {
+    return {
+      title: "Apply for a Study Permit",
+      detail:
+        "For studies longer than 6 months, you typically need a Canadian Study Permit. An eTA may only be needed to fly to Canada (entry requirement), not as a document of stay.",
+      urgency: "HIGH",
+      createDoc: { title: "Study Permit", type: "study_permit" },
+      ctaLabel: "Create Study Permit document",
+    };
+  }
+
 
   if (auth === "ETA") {
     return {
@@ -316,7 +349,7 @@ function addDaysISO(base: Date, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function suggestedDateForCreate(docType: "eta" | "esta" | "visa" | string | undefined): string {
+function suggestedDateForCreate(docType: "eta" | "esta" | "visa" | "study_permit" | string | undefined): string {
   // We keep it simple (MVP) and conservative:
   // - ETA: often long validity → suggest +5 years
   // - ESTA: often shorter → suggest +2 years
@@ -339,11 +372,12 @@ function suggestedDateForCreate(docType: "eta" | "esta" | "visa" | string | unde
   return now.toISOString().slice(0, 10);
 }
 
-function mapCreateDocTypeToBackend(type: "eta" | "esta" | "visa" | string): string {
+function mapCreateDocTypeToBackend(type: "eta" | "esta" | "visa" | "study_permit" | string): string {
   // Backend expects enum-like values (ETA / ESTA / VISA ...)
   if (type === "eta") return "ETA";
   if (type === "esta") return "ESTA";
   if (type === "visa") return "VISA";
+  if (type === "study_permit") return "STUDY_PERMIT";
   return String(type).toUpperCase();
 }
 
@@ -548,13 +582,27 @@ export function NextStepsCard({
     const _reqDocs = requiredDocsFromResult;
     if (!_reqDocs.length) return baseChecklist;
 
-    const longStayItems = _reqDocs.map((d: any) => ({
-      id: `reqdoc:${String(d?.id ?? d?.code ?? d?.title ?? d?.name ?? "doc")}`,
-      title: String(d?.title ?? d?.name ?? "Required document"),
-      detail: String(d?.detail ?? d?.description ?? "Add this document to your vault."),
-      status: "TODO",
-      canComplete: true,
-    })) as any[];
+    const longStayItems = _reqDocs
+    .map((d: any) => {
+      const level = String(d?.level ?? "BLOCKING").toUpperCase();
+const isInfo = level === "INFO";
+      return {
+        id: `reqdoc:${String(d?.id ?? d?.code ?? d?.title ?? d?.name ?? "doc")}`,
+        title: String(d?.title ?? d?.name ?? "Required document"),
+        detail: String(d?.detail ?? d?.description ?? "Add this document to your vault."),
+        status: isInfo ? "INFO" : "TODO",
+        urgency: isInfo ? "LOW" : "HIGH",
+        canComplete: !isInfo,
+        level,
+      };
+    })
+    // BLOCKING first, INFO after
+    .sort((a: any, b: any) => {
+      const ai = a.level === "INFO" ? 1 : 0;
+      const bi = b.level === "INFO" ? 1 : 0;
+      if (ai === bi) return 0;
+      return ai < bi ? -1 : 1;
+    }) as any[];
 
     return ([...longStayItems, ...(baseChecklist as any)] as any);
   }, [mounted, baseChecklist, requiredDocsFromResult]);
@@ -602,7 +650,7 @@ export function NextStepsCard({
         const json = (await travelRes.json()) as EntryResult;
 
         setData(json);
-        setStep(computeNextStep(json));
+        setStep(computeNextStep(json, localStorage.getItem("activeProjectStayBucket") || "SHORT"));
 
         setDocTypes(documentsTypeSet(docs));
       } catch (e: any) {
@@ -756,7 +804,29 @@ export function NextStepsCard({
 
 
 
-  return (
+  
+  // SC_CHECKLIST_INFO_UI_V3 — separate blocking vs info items for display (must be in component scope)
+  const visibleChecklist = useMemo(() => {
+    return (checklist ?? []).filter((it: any) => it?.id !== "passport" && it?.id !== "destination");
+  }, [checklist]);
+
+  const isInfoItem = (it: any) => {
+    // INFO if:
+    // - base checklist uses `status: "INFO"`
+    // - requiredDocuments uses `level: "INFO"`
+    // - future-proof: required === false
+    return it?.status === "INFO" || it?.level === "INFO" || it?.required === false;
+  };
+
+  const blockingChecklist = useMemo(() => {
+    return (visibleChecklist ?? []).filter((it: any) => !isInfoItem(it));
+  }, [visibleChecklist]);
+
+  const infoChecklist = useMemo(() => {
+    return (visibleChecklist ?? []).filter((it: any) => isInfoItem(it));
+  }, [visibleChecklist]);
+
+return (
     <div className="rounded-2xl border bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -1109,43 +1179,80 @@ export function NextStepsCard({
 
 
             <ul className="mt-4 space-y-3">
-              {checklist
-                .filter((it: any) => it.id !== "passport" && it.id !== "destination")
-                .map((it: any) => {
-                  const done = resolvedDone(it.id);
-                  const autoDone = resolvedAutoDone(it.id);
 
-                  return (
-                    <li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${done ? "opacity-70" : ""}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className={`font-medium ${done ? "line-through" : ""}`}>{it.title}</p>
-                          <p className={`mt-1 text-sm text-gray-600 ${done ? "line-through" : ""}`} suppressHydrationWarning>
-                            {it.detail}
-                          </p>
 
-                          {done && doneSourceMap[it.id] === "created" ? (
-                            <p className="mt-2 text-xs text-gray-500">Created via StudyComply.</p>
-                          ) : done && doneSourceMap[it.id] === "manual" ? (
-                            <p className="mt-2 text-xs text-gray-500">Marked as done manually.</p>
-                          ) : null}
-                        </div>
+            {/* BLOCKING (required) */}
+            {blockingChecklist.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  Required before travel
+                </p>
+              </div>
+            )}
 
-                        <button
-                          type="button"
-                          onClick={() => toggleDone(it.id)}
-                          disabled={autoDone}
-                          className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${
-                            done ? "bg-white" : "bg-black text-white"
-                          } ${autoDone ? "cursor-not-allowed opacity-60" : ""}`}
-                        >
-                          {autoDone ? "Done" : done ? "Undo" : "Done"}
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-            </ul>
+            {blockingChecklist.map((it: any) => (
+              <li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${doneMap[it.id] ? "opacity-70" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium ${doneMap[it.id] ? "line-through" : ""}`}>{it.title}</p>
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium bg-red-50 text-red-700 border-red-200">
+                        Required
+                      </span>
+                    </div>
+                    <p className={`mt-1 text-sm text-gray-600 ${doneMap[it.id] ? "line-through" : ""}`} suppressHydrationWarning>
+                      {it.detail}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleDone(it.id)}
+                    className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${doneMap[it.id] ? "bg-white" : "bg-black text-white"}`}
+                  >
+                    {doneMap[it.id] ? "Undo" : "Done"}
+                  </button>
+                </div>
+              </li>
+            ))}
+
+            {/* INFO (non-blocking) */}
+            {infoChecklist.length > 0 && (
+              <div className="mt-6 mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  Additional info
+                </p>
+              </div>
+            )}
+
+            {infoChecklist.map((it: any) => (
+              <li key={it.id} className={`rounded-xl border bg-gray-50 p-4 ${doneMap[it.id] ? "opacity-70" : ""}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium ${doneMap[it.id] ? "line-through" : ""}`}>{it.title}</p>
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium bg-blue-50 text-blue-700 border-blue-200">
+                        Info
+                      </span>
+                    </div>
+                    <p className={`mt-1 text-sm text-gray-600 ${doneMap[it.id] ? "line-through" : ""}`} suppressHydrationWarning>
+                      {it.detail}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleDone(it.id)}
+                    className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-medium ${doneMap[it.id] ? "bg-white" : "bg-black text-white"}`}
+                  >
+                    {doneMap[it.id] ? "Undo" : "Done"}
+                  </button>
+                </div>
+              </li>
+            ))}
+
+
+</ul>
           </div>
         </details>
       )}
