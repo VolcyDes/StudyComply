@@ -51,7 +51,7 @@ export default function RegisterPage() {
         } catch {}
       }
 
-      router.push(role === "UNIVERSITY" ? "/dashboard/university" : "/dashboard/student");
+      router.push((portal === "university" || portal === "UNIVERSITY") ? "/dashboard/university" : "/dashboard/student");
     } catch (err: any) {
       setError(err?.message || "Erreur lors de la création de compte.");
     } finally {
