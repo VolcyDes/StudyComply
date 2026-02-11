@@ -2,6 +2,9 @@
 
 import { iso2ToTravelDestination } from "@/lib/travelDestination";
 import { useEffect, useMemo, useState } from "react";
+import type { UserDocument } from "@/lib/documents/types";
+import { readDismissedAlerts, writeDismissedAlerts } from "@/lib/documents/alerts";
+import type { DismissedAlertsMap } from "@/lib/documents/alerts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 function scPersistStayBucket(bucket: string) {
@@ -17,406 +20,11 @@ import { isChecklistItemDone, isChecklistItemAutoDone } from "@/lib/dashboard/ch
 import type { ChecklistItemId } from "@/lib/dashboard/checklistMapping";
 
 
-type AuthFetchLike =
-  | ((path: string, init?: RequestInit) => Promise<Response>)
-  | ((path: string, init?: RequestInit) => Promise<{ res: Response; data: any }>);
+import { toResData, toResOnly, errMsg, type AuthFetchLike } from "@/lib/http/res";
+import { ALERT_SOON_DAYS, ALERT_URGENT_DAYS, DISMISS_DEFAULT_DAYS, alertPillClass, daysUntil, fmtDate, isDismissed, todayISO, addDaysISODateOnly } from "@/lib/travel/alerts";
+import { buildChecklist } from "@/lib/travel/checklist";
+import { computeNextStep, type EntryResult, type NextStep, suggestedDateForCreate, mapCreateDocTypeToBackend } from "@/lib/travel/nextStep";
 
-async function toResData(out: Response | { res: Response; data: any }) {
-  if (out instanceof Response) {
-    const res = out;
-    const ct = res.headers.get("content-type") || "";
-    let data: any = null;
-    try {
-      if (ct.includes("application/json")) data = await res.clone().json();
-      else data = await res.clone().text();
-    } catch {
-      data = null;
-    }
-    return { res, data };
-  }
-  return out;
-}
-
-async function toResOnly(authFetch: AuthFetchLike, path: string, init?: RequestInit): Promise<Response> {
-  const out = await authFetch(path, init);
-  return out instanceof Response ? out : out.res;
-}
-
-
-function errMsg(data: any, fallback: string) {
-  if (typeof data === "string" && data.trim()) return data;
-  if (data && typeof data === "object" && typeof data.message === "string") return data.message;
-  try {
-    const s = JSON.stringify(data ?? {});
-    return s === "{}" ? fallback : s;
-  } catch {
-    return fallback;
-  }
-}
-
-type EntryResult =
-  | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
-  | {
-      destination: "SCHENGEN";
-      status: "VISA_FREE";
-      basedOn: string;
-      maxStayDays: number;
-      periodDays: number;
-      etiasRequired: boolean;
-      message: string;
-    }
-  | { destination: "SCHENGEN"; status: "VISA_REQUIRED"; basedOn: string; message: string }
-  | {
-      destination: "UK" | "USA" | "CANADA";
-      status: "AUTH_REQUIRED" | "VISA_REQUIRED" | "FREE" | "VISA_FREE";
-      basedOn: string;
-      message: string;
-      meta?: Record<string, any>;
-      requiredDocuments?: any[];
-    };
-
-type NextStep = {
-  title: string;
-  detail: string;
-  urgency: "LOW" | "MEDIUM" | "HIGH";
-  createDoc?: { title: string; type: "eta" | "esta" | "visa" | "study_permit" };
-  ctaLabel?: string;
-};
-
-type ChecklistItem = {
-  id: string;
-  title: string;
-  detail: string;
-  status: "DONE" | "TODO" | "INFO";
-  urgency?: "LOW" | "MEDIUM" | "HIGH";
-  link?: string;
-  canComplete?: boolean;
-};
-
-type UserDocument = {
-  id: string;
-  title: string;
-  type: string;
-  expiresAt?: string | null;
-};
-
-function parseISODateOnly(iso?: string | null): Date | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
-}
-
-function daysUntil(iso?: string | null): number | null {
-  const d = parseISODateOnly(iso);
-  if (!d) return null;
-  const now = new Date();
-  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const b = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  return Math.round((b - a) / (1000 * 60 * 60 * 24));
-}
-
-function fmtDate(iso?: string | null): string {
-  const d = parseISODateOnly(iso);
-  if (!d) return "";
-  return d.toISOString().slice(0, 10);
-}
-
-function alertPillClass(days: number) {
-  if (days <= 7) return "bg-red-100 text-red-800 border-red-200";
-  if (days <= 30) return "bg-yellow-100 text-yellow-800 border-yellow-200";
-  return "bg-green-100 text-green-800 border-green-200";
-}
-
-// 🔔 Alert thresholds (single source of truth)
-const ALERT_SOON_DAYS = 30;     // show alert banner / renewal
-const ALERT_URGENT_DAYS = 7;    // urgent (red)
-const DISMISS_DEFAULT_DAYS = 7; // snooze duration
-
-
-const DISMISSED_ALERTS_KEY = "sc:alerts:dismissed:v1";
-
-function todayISO(): string {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
-}
-
-function addDaysISODateOnly(days: number): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function isDismissed(docId: string, dismissedMap: Record<string, string>): boolean {
-  const until = dismissedMap?.[docId];
-  if (!until) return false;
-  // If until >= today -> dismissed
-  return until >= todayISO();
-}
-
-
-function buildChecklist(args: {
-  destinationIso2: string;
-  passportChoice: string;
-  travelResult: any | null;
-  stayDays?: number;
-}): ChecklistItem[] {
-  const items: ChecklistItem[] = [];
-
-  const res = args.travelResult;
-  const stayDays = typeof args.stayDays === "number" ? args.stayDays : 0;
-  const longStay = stayDays > 90;
-
-  if (res?.status === "AUTH_REQUIRED") {
-    const auth = res?.meta?.auth ? String(res.meta.auth) : "authorization";
-
-    // Stable ids so we can map to documents.type
-    const id =
-      auth === "ESTA" ? "esta" :
-      auth === "ETA" || auth === "eTA" ? "eta" :
-      "auth";
-
-    items.push({
-      id,
-      title: `Get your ${auth}`,
-      detail: res?.message || "You need an authorization before travelling.",
-      status: "TODO",
-      urgency: "HIGH",
-      canComplete: true,
-    });
-  } else if (res?.status === "VISA_REQUIRED") {
-    items.push({
-      id: "visa",
-      title: "Start your visa application",
-      detail: res?.message || "A visa is required for this destination.",
-      status: "TODO",
-      urgency: "HIGH",
-      canComplete: true,
-    });
-  } else if (res?.status === "FREE" || res?.status === "VISA_FREE") {
-    items.push({
-      id: "rule",
-      title: "Travel rule for short stays",
-      detail: res?.message || "You can travel for short stays under the current rules.",
-      status: "INFO",
-      urgency: "LOW",
-    });
-  } else {
-    items.push({
-      id: "rule",
-      title: "Check travel requirements",
-      detail: "We could not load a clear rule. Try refreshing.",
-      status: "INFO",
-      urgency: "MEDIUM",
-    });
-  }
-
-  if (longStay) {
-    items.push({
-      id: "longstay",
-      title: "Long stay (90+ days)",
-      detail:
-        "For stays longer than 90 days, you usually need a long-stay visa or residence permit. Short-stay rules (ETA/ESTA/eTA) may not apply.",
-      status: "INFO",
-      urgency: "MEDIUM",
-      canComplete: true,
-    });
-  }
-
-  items.push({
-    id: "vault",
-    title: "Store your documents",
-    detail: "Add your visa/authorization/insurance documents to the vault and track expiry dates.",
-    status: "INFO",
-    urgency: "LOW",
-    canComplete: true,
-  });
-
-  return items;
-}
-
-function pillClass(u: NextStep["urgency"]) {
-  switch (u) {
-    case "HIGH":
-      return "bg-red-100 text-red-800 border-red-200";
-    case "MEDIUM":
-      return "bg-yellow-100 text-yellow-800 border-yellow-200";
-    case "LOW":
-      return "bg-green-100 text-green-800 border-green-200";
-  }
-}
-
-function computeNextStep(res: EntryResult, stayBucket?: string): NextStep {
-  const auth = (res as any)?.meta?.auth as string | undefined;
-  // CANADA_LONG_STAY_NEXTSTEP_V1
-  if ((res as any)?.destination === "CANADA" && (res as any)?.meta?.longStay) {
-    return {
-      title: "Apply for a Study Permit",
-      detail:
-        "For long stays in Canada, the main requirement is typically a Study Permit. An eTA may be needed only to board a flight (entry by air).",
-      urgency: "HIGH",
-      createDoc: { title: "Study Permit", type: "study_permit" },
-      ctaLabel: "Create Study Permit document",
-    };
-  }
-
-  // CANADA_STUDY_PERMIT_OVERRIDE_V1
-  // If long stay, the primary action is Study Permit (eTA is entry-by-air only).
-  if ((res as any)?.destination === "CANADA" && stayBucket && stayBucket !== "SHORT") {
-    return {
-      title: "Apply for a Study Permit",
-      detail:
-        "For studies longer than 6 months, you typically need a Canadian Study Permit. An eTA may only be needed to fly to Canada (entry requirement), not as a document of stay.",
-      urgency: "HIGH",
-      createDoc: { title: "Study Permit", type: "study_permit" },
-      ctaLabel: "Create Study Permit document",
-    };
-  }
-
-
-  if (auth === "ETA") {
-    return {
-      title: "Apply for a UK ETA",
-      detail: "You must obtain an ETA before travelling to the UK for short visits.",
-      urgency: "HIGH",
-      createDoc: { title: "UK ETA", type: "eta" },
-      ctaLabel: "Create ETA document",
-    };
-  }
-
-  if (auth === "ESTA") {
-    return {
-      title: "Apply for a US ESTA",
-      detail: "For short stays under the Visa Waiver Program, you need an approved ESTA before departure.",
-      urgency: "HIGH",
-      createDoc: { title: "US ESTA", type: "esta" },
-      ctaLabel: "Create ESTA document",
-    };
-  }
-
-  if (auth === "eTA") {
-    return {
-      title: "Apply for a Canada eTA",
-      detail: "To fly to (or transit through) Canada, you need an eTA before travelling.",
-      urgency: "HIGH",
-      createDoc: { title: "Canada eTA", type: "eta" },
-      ctaLabel: "Create eTA document",
-    };
-  }
-
-  if (res.status === "FREE") {
-    return {
-      title: "Nothing urgent",
-      detail:
-        res.destination === "SCHENGEN"
-          ? "You have free movement for short stays in Schengen."
-          : "You can travel for short visits without extra authorization.",
-      urgency: "LOW",
-    };
-  }
-
-  if (res.status === "VISA_REQUIRED") {
-    return {
-      title: "Start your visa application",
-      detail: "A visa appears to be required for your passport. Begin the application process as soon as possible.",
-      urgency: "HIGH",
-      createDoc: { title: res.destination === "SCHENGEN" ? "Schengen visa" : "Visa", type: "visa" },
-      ctaLabel: "Create visa document",
-    };
-  }
-
-  if ((res as any).destination === "SCHENGEN" && (res as any).status === "VISA_FREE") {
-    if ((res as any).etiasRequired) {
-      return {
-        title: "Apply for ETIAS",
-        detail: "You can travel visa-free for short stays, but ETIAS will be required before travel.",
-        urgency: "MEDIUM",
-        createDoc: { title: "ETIAS", type: "visa" },
-        ctaLabel: "Create ETIAS document",
-      };
-    }
-    return {
-      title: "No additional authorization needed",
-      detail: "You can travel visa-free for short stays in Schengen.",
-      urgency: "LOW",
-    };
-  }
-
-  return {
-    title: "Check requirements",
-    detail: "We couldn’t infer a single next step. Verify your travel requirements.",
-    urgency: "MEDIUM",
-  };
-}
-
-function isoToDateInput(iso?: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toISOString().slice(0, 10);
-}
-
-function readProjectDates() {
-  // Returns YYYY-MM-DD strings (or empty) for start/end if available.
-  let start = "";
-  let end = "";
-
-  try {
-    start = isoToDateInput(localStorage.getItem("activeProjectStartDate"));
-  } catch {}
-
-  try {
-    end = isoToDateInput(localStorage.getItem("activeProjectEndDate"));
-  } catch {}
-
-  return { start, end };
-}
-
-function addYearsISO(base: Date, years: number): string {
-  const d = new Date(base);
-  d.setFullYear(d.getFullYear() + years);
-  // Normalize to YYYY-MM-DD in local time-ish
-  return d.toISOString().slice(0, 10);
-}
-
-function addDaysISO(base: Date, days: number): string {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function suggestedDateForCreate(docType: "eta" | "esta" | "visa" | "study_permit" | string | undefined): string {
-  // We keep it simple (MVP) and conservative:
-  // - ETA: often long validity → suggest +5 years
-  // - ESTA: often shorter → suggest +2 years
-  // - VISA: suggest end of project if known (or start), else +90 days
-  const now = new Date();
-  const t = (docType || "").toLowerCase();
-  const { start, end } = readProjectDates();
-
-  if (t === "eta") return addYearsISO(now, 5);
-  if (t === "esta") return addYearsISO(now, 2);
-
-  if (t === "visa") {
-    if (end) return end;
-    if (start) return start;
-    return addDaysISO(now, 90);
-  }
-
-  // Default fallback: project start date if available, else today
-  if (start) return start;
-  return now.toISOString().slice(0, 10);
-}
-
-function mapCreateDocTypeToBackend(type: "eta" | "esta" | "visa" | "study_permit" | string): string {
-  // Backend expects enum-like values (ETA / ESTA / VISA ...)
-  if (type === "eta") return "ETA";
-  if (type === "esta") return "ESTA";
-  if (type === "visa") return "VISA";
-  if (type === "study_permit") return "STUDY_PERMIT";
-  return String(type).toUpperCase();
-}
 
 export function NextStepsCard({
   authFetch,
@@ -448,7 +56,7 @@ export function NextStepsCard({
   const [docsRefreshKey, setDocsRefreshKey] = useState(0);
 
   // 🔕 Dismissed alerts (per doc, local-only)
-  const [dismissedMap, setDismissedMap] = useState<Record<string, string>>({});
+  const [dismissedMap, setDismissedMap] = useState<DismissedAlertsMap>({});
 
   const [doneSourceMap, setDoneSourceMap] = useState<Record<string, "manual" | "created">>({});
 
@@ -494,20 +102,12 @@ export function NextStepsCard({
   useEffect(() => {
     setMounted(true);
   }, []);
-
-
   // Load dismissed alerts map (localStorage)
   useEffect(() => {
     if (!mounted) return;
-    try {
-      const raw = localStorage.getItem(DISMISSED_ALERTS_KEY);
-      setDismissedMap(raw ? JSON.parse(raw) : {});
-    } catch {
-      setDismissedMap({});
-    }
+    setDismissedMap(readDismissedAlerts());
   }, [mounted]);
-
-  useEffect(() => {
+useEffect(() => {
     if (!mounted) return;
     try {
       const raw = localStorage.getItem(checklistKey);
@@ -705,6 +305,11 @@ setData(json);
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authFetch, mounted, destIso2, passportChoice, stayDays, refreshKey]);  // Upcoming expiry alerts (computed from docs)
+function isDismissed(id: string, dismissed: DismissedAlertsMap): boolean {
+  return !!dismissed?.[id];
+}
+
+
   const upcoming = useMemo(() => {
     const list = (docs ?? [])
       .map((d) => ({ doc: d, days: daysUntil(d.expiresAt) }))
@@ -826,13 +431,13 @@ setData(json);
   useEffect(() => {
     if (!mounted) return;
     try {
-      localStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify(dismissedMap));
+      writeDismissedAlerts(dismissedMap);
     } catch {}
   }, [mounted, dismissedMap]);
 
   function dismissAlert(docId: string, days: number) {
     const until = addDaysISODateOnly(days);
-    setDismissedMap((prev) => ({ ...prev, [docId]: until }));
+    setDismissedMap((prev) => ({ ...prev, [docId]: true }));
   }
 
   function undoDismiss(docId: string) {
@@ -865,6 +470,15 @@ setData(json);
   const infoChecklist = useMemo(() => {
     return (visibleChecklist ?? []).filter((it: any) => isInfoItem(it));
   }, [visibleChecklist]);
+
+  function pillClass(u: NextStep["urgency"]) {
+    if (u === "HIGH") return "bg-red-50 text-red-700 border-red-200";
+    if (u === "MEDIUM") return "bg-amber-50 text-amber-700 border-amber-200";
+    if (u === "LOW") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    return "bg-gray-50 text-gray-700 border-gray-200";
+  }
+
+
 
 return (
     <div className="rounded-2xl border bg-white p-5">
