@@ -1,33 +1,22 @@
 "use client";
 
-import * as React from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getMe } from "@/lib/meApi";
+import { getAccountKindClient } from "@/lib/meClient";
 
-export default function DashboardGatePage() {
+export default function DashboardRedirectPage() {
   const router = useRouter();
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
-        const me = await getMe();
-        if (me.user.role === "UNIVERSITY") {
-          router.replace("/dashboard/university");
-          return;
-        }
-        // USER / ADMIN -> dashboard étudiant (l’ancien)
-        router.replace("/dashboard/student");
-      } catch (e: any) {
-        setErr(e?.message || "Not authenticated");
-      } finally {
-        setLoading(false);
+        const kind = await getAccountKindClient();
+        router.replace(kind === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+      } catch {
+        router.replace("/login");
       }
     })();
   }, [router]);
 
-  if (err) return <div className="p-6">❌ {err}</div>;
-  if (loading) return <div className="p-6">Redirecting…</div>;
-  return null;
+  return <p className="text-sm text-gray-600">Redirecting…</p>;
 }

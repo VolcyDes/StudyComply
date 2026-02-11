@@ -15,7 +15,7 @@ export async function authFetch(
     },
   });
 
-  const raw = await res.text();
+  const raw = await res.clone().text();
   let data: any = null;
   try {
     data = raw ? JSON.parse(raw) : null;

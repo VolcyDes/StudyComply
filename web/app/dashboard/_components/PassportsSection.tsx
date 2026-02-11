@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import { CountryCombobox } from "@/components/CountryCombobox";
 
 type Passport = {
   id: string;
@@ -143,15 +144,15 @@ export default function PassportsSection({
       {showAddForm ? (
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <div className="md:col-span-1">
-            <label className="text-sm font-medium">Country code (ISO2)</label>
-            <input
-              className="mt-1 w-full rounded-xl border px-3 py-2"
-              value={countryCode}
-              onChange={(e) => setCountryCode(e.target.value)}
-              placeholder="FR"
-              maxLength={2}
-            />
-            <p className="mt-1 text-xs text-gray-500">Example: FR, DE, ES</p>
+            <label className="text-sm font-medium">Country</label>
+            <div className="mt-1">
+              <CountryCombobox
+                value={countryCode}
+                onChange={(iso2) => setCountryCode(iso2)}
+                placeholder="Select your passport country…"
+              />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">Search by country name, it will save ISO2.</p>
           </div>
 
           <div className="md:col-span-1 flex items-end">

@@ -5,10 +5,10 @@ export async function fetchUserDocumentsWith(
 ): Promise<UserDocument[]> {
   const res = await authFetch("/api/v1/documents", { method: "GET" });
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = await res.clone().text().catch(() => "");
     throw new Error(`Failed to fetch documents (${res.status}): ${text}`);
   }
-  const data = await res.json();
+  const data = await res.clone().json();
   // Support multiple shapes: array or {items: []}
   if (Array.isArray(data)) return data as UserDocument[];
   if (data && Array.isArray((data as any).items)) return (data as any).items as UserDocument[];

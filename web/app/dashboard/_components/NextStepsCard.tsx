@@ -678,16 +678,17 @@ const isInfo = level === "INFO";
         const docsPromise = fetchUserDocumentsWith((p,i)=>toResOnly(authFetch,p,i));
 
         const [travelRes, docs] = await Promise.all([travelPromise, docsPromise]);
-        const travelResOnly = travelRes instanceof Response ? travelRes : travelRes.res;
 
-        if (!travelResOnly.ok) {
-          const txt = await travelResOnly.text();
-          throw new Error(txt || `Failed (${travelResOnly.status})`);
+        // ✅ authFetch might already have read the body and returned { res, data }.
+        // Always use toResData() so we never read the stream twice.
+        const travel = await toResData(travelRes);
+
+        if (!travel.res.ok) {
+          throw new Error(errMsg(travel.data, `Failed (${travel.res.status})`));
         }
 
-        const json = (await travelResOnly.json()) as EntryResult;
-
-        setData(json);
+        const json = travel.data as EntryResult;
+setData(json);
         setStep(computeNextStep(json, localStorage.getItem("activeProjectStayBucket") || "SHORT"));
 
         setDocTypes(documentsTypeSet(docs));
