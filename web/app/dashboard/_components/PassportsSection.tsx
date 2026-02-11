@@ -17,12 +17,46 @@ function flagUrl(code: string) {
   return `/flags/${code.toLowerCase()}.png`;
 }
 
+type AuthFetchLike =
+  | ((path: string, init?: RequestInit) => Promise<Response>)
+  | ((path: string, init?: RequestInit) => Promise<{ res: Response; data: any }>);
+
+async function toResData(out: Response | { res: Response; data: any }) {
+  if (out instanceof Response) {
+    const res = out;
+    const ct = res.headers.get("content-type") || "";
+    let data: any = null;
+
+    // ✅ read ONCE via clone (no "body already read")
+    try {
+      if (ct.includes("application/json")) data = await res.clone().json();
+      else data = await res.clone().text();
+    } catch {
+      data = null;
+    }
+
+    return { res, data };
+  }
+  return out;
+}
+
+function errMsg(data: any, fallback: string) {
+  if (typeof data === "string" && data.trim()) return data;
+  if (data && typeof data === "object" && typeof data.message === "string") return data.message;
+  try {
+    const s = JSON.stringify(data ?? {});
+    return s === "{}" ? fallback : s;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function PassportsSection({
   authFetch,
   onChanged,
   showAddForm = true,
 }: {
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+  authFetch: AuthFetchLike;
   onChanged?: () => void;
   showAddForm?: boolean;
 }) {
@@ -37,9 +71,9 @@ export default function PassportsSection({
     setItemsError(null);
     setItemsLoading(true);
     try {
-      const res = await authFetch("/api/v1/passports");
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as Passport[];
+      const r = await toResData(await authFetch("/api/v1/passports"));
+      if (!r.res.ok) throw new Error(errMsg(r.data, "Failed to load passports"));
+      const data = Array.isArray(r.data) ? (r.data as Passport[]) : [];
       setItems(data);
     } catch (e: any) {
       setItemsError(e?.message ?? "Failed to load passports");
@@ -59,12 +93,14 @@ export default function PassportsSection({
 
     setAdding(true);
     try {
-      const res = await authFetch("/api/v1/passports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ countryCode: cc }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      const r = await toResData(
+        await authFetch("/api/v1/passports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ countryCode: cc }),
+        })
+      );
+      if (!r.res.ok) throw new Error(errMsg(r.data, "Failed to add passport"));
       await load();
       onChanged?.();
     } catch (e: any) {
@@ -82,8 +118,8 @@ export default function PassportsSection({
     setItems((cur) => cur.filter((p) => p.countryCode !== cc));
 
     try {
-      const res = await authFetch(`/api/v1/passports/${cc}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      const r = await toResData(await authFetch(`/api/v1/passports/${cc}`, { method: "DELETE" }));
+      if (!r.res.ok) throw new Error(errMsg(r.data, "Failed to remove passport"));
       onChanged?.();
     } catch (e: any) {
       setItems(prev);
@@ -96,15 +132,10 @@ export default function PassportsSection({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">Your passports</h2>
-          <p className="text-sm text-gray-600">
-            Add your nationality(ies). Requirements depend on your passport(s).
-          </p>
+          <p className="text-sm text-gray-600">Add your nationality(ies). Requirements depend on your passport(s).</p>
         </div>
 
-        <button
-          onClick={load}
-          className="rounded-xl border px-3 py-1.5 text-sm hover:bg-gray-50"
-        >
+        <button onClick={load} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-gray-50">
           Refresh
         </button>
       </div>
@@ -127,10 +158,7 @@ export default function PassportsSection({
             <button
               onClick={addPassport}
               disabled={adding || !normalizeIso2(countryCode)}
-              className={clsx(
-                "w-full rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60",
-                "bg-black"
-              )}
+              className={clsx("w-full rounded-xl px-4 py-2 text-white hover:opacity-90 disabled:opacity-60", "bg-black")}
             >
               {adding ? "Adding..." : "Add passport"}
             </button>
@@ -150,18 +178,10 @@ export default function PassportsSection({
             <li key={p.id} className="py-3 flex items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <img
-                    src={flagUrl(p.countryCode)}
-                    alt={p.countryCode}
-                    width={20}
-                    height={14}
-                    className="rounded-sm"
-                  />
+                  <img src={flagUrl(p.countryCode)} alt={p.countryCode} width={20} height={14} className="rounded-sm" />
                   <span className="font-medium">{p.countryCode}</span>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Added: {new Date(p.createdAt).toLocaleDateString()}
-                </p>
+                <p className="text-xs text-gray-500">Added: {new Date(p.createdAt).toLocaleDateString()}</p>
               </div>
 
               <button

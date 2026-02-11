@@ -1,0 +1,653 @@
+import UniversityRequirementsCard from "../_components/UniversityRequirementsCard";
+"use client";
+
+import * as React from "react";
+
+import { useEffect, useState } from "react";
+import { UniversityCombobox } from "../_components/UniversityCombobox";
+import { UniversityRequirementsCard } from "../_components/UniversityRequirementsCard";
+import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "../../../lib/config";
+
+import PassportsSection from "../_components/PassportsSection";
+import ProjectSection from "../_components/ProjectSection";
+import { NextStepsCard } from "../_components/NextStepsCard";
+type MeResponse = {
+  user: { id: string; email: string; createdAt: string; updatedAt: string };
+};
+
+type DocumentItem = {
+  id: string;
+  title: string;
+  type: string;
+  expiresAt: string;
+  createdAt: string;
+  userId: string;
+
+  fileName?: string | null;
+  fileMime?: string | null;
+  fileSize?: number | null;
+};
+
+function daysUntil(dateIso: string) {
+  const ms = new Date(dateIso).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+function getUrgency(days: number) {
+  if (days < 0) return { label: "Expired", cls: "bg-gray-200 text-gray-700 border-gray-300" };
+  if (days === 0) return { label: "Today", cls: "bg-red-100 text-red-700 border-red-200" };
+  if (days <= 7) return { label: `${days} days`, cls: "bg-red-100 text-red-700 border-red-200" };
+  if (days <= 30) return { label: `${days} days`, cls: "bg-orange-100 text-orange-700 border-orange-200" };
+  return { label: `${days} days`, cls: "bg-green-100 text-green-700 border-green-200" };
+}
+
+function sortByUrgency(a: DocumentItem, b: DocumentItem) {
+  const da = daysUntil(a.expiresAt);
+  const db = daysUntil(b.expiresAt);
+
+  const aExpired = da < 0;
+  const bExpired = db < 0;
+  if (aExpired && !bExpired) return 1;
+  if (!aExpired && bExpired) return -1;
+
+  return da - db;
+}
+
+function isoToDateInput(iso: string) {
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+function formatBytes(bytes?: number | null) {
+  if (!bytes || bytes <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) {
+    n = n / 1024;
+    i++;
+  }
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+export default function DashboardPage() {
+  const [uniSlug, setUniSlug] = React.useState<string>("ucsd");
+  const router = useRouter();
+
+  const [email, setEmail] = useState<string>("...");
+  const [loading, setLoading] = useState(true);
+
+  const [docsLoading, setDocsLoading] = useState(true);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [docsError, setDocsError] = useState<string | null>(null);
+
+  // Add form
+  const [title, setTitle] = useState("");
+  const [type, setType] = useState("visa");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editType, setEditType] = useState("visa");
+  const [editExpiresAt, setEditExpiresAt] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Upload state
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+
+  // refresh hook for requirements
+  const [requirementsRefreshKey, setRequirementsRefreshKey] = useState(0);
+  function bumpRequirements() {
+    setRequirementsRefreshKey((x) => x + 1);
+  }
+
+  async function authFetch(path: string, init?: RequestInit) {
+    const t = localStorage.getItem("token");
+    if (!t) {
+      router.push("/login");
+      return new Response(null, { status: 401 });
+    }
+
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        Authorization: `Bearer ${t}`,
+      },
+    });
+
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      router.push("/login");
+      throw new Error("Unauthorized");
+    }
+
+    return res;
+  }
+
+  async function loadMe() {
+    const res = await authFetch("/api/v1/me");
+    const data: MeResponse = await res.json();
+    setEmail(data.user.email);
+  }
+
+  async function loadDocuments() {
+    setDocsError(null);
+    setDocsLoading(true);
+
+    try {
+      const res = await authFetch("/api/v1/documents");
+      const data: DocumentItem[] = await res.json();
+      data.sort(sortByUrgency);
+      setDocuments(data);
+    } catch (e: any) {
+      setDocsError(e?.message ?? "Failed to load documents");
+    } finally {
+      setDocsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    async function boot() {
+      try {
+        const t = localStorage.getItem("token");
+        if (!t) {
+          router.push("/login");
+          return;
+        }
+        await loadMe();
+        await loadDocuments();
+      } finally {
+        setLoading(false);
+      }
+    }
+    boot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
+
+  async function createDocumentRaw(args: { title: string; type: string; expiresAt: string }) {
+    const res = await authFetch("/api/v1/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(args),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(msg || `Create failed (${res.status})`);
+    }
+
+    const created: DocumentItem = await res.json();
+    setDocuments((prev) => {
+      const next = [...prev, created];
+      next.sort(sortByUrgency);
+      return next;
+    });
+  }
+
+  async function createDocument(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+
+    try {
+      await createDocumentRaw({ title, type, expiresAt });
+      setTitle("");
+      setType("visa");
+      setExpiresAt("");
+      bumpRequirements();
+    } catch (e: any) {
+      alert(e?.message ?? "Create failed");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function quickCreateFromRequirement(args: { title: string; type: string; expiresAt: string }) {
+    try {
+      await createDocumentRaw(args);
+      bumpRequirements();
+    } catch (e: any) {
+      alert(e?.message ?? "Create failed");
+    }
+  }
+
+  async function deleteDocument(id: string) {
+    const ok = confirm("Delete this document?");
+    if (!ok) return;
+
+    const prev = documents;
+    setDocuments((current) => current.filter((d) => d.id !== id));
+    if (editingId === id) setEditingId(null);
+
+    try {
+      const res = await authFetch(`/api/v1/documents/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || `Delete failed (${res.status})`);
+      }
+      bumpRequirements();
+    } catch (e: any) {
+      setDocuments(prev);
+      alert(e?.message ?? "Delete failed");
+    }
+  }
+
+  function startEdit(doc: DocumentItem) {
+    setEditingId(doc.id);
+    setEditTitle(doc.title);
+    setEditType(doc.type);
+    setEditExpiresAt(isoToDateInput(doc.expiresAt));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditTitle("");
+    setEditType("visa");
+    setEditExpiresAt("");
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+
+    const prev = documents;
+
+    setDocuments((current) => {
+      const next = current.map((d) =>
+        d.id === id
+          ? {
+              ...d,
+              title: editTitle,
+              type: editType,
+              expiresAt: new Date(editExpiresAt).toISOString(),
+            }
+          : d,
+      );
+      next.sort(sortByUrgency);
+      return next;
+    });
+
+    try {
+      const res = await authFetch(`/api/v1/documents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle,
+          type: editType,
+          expiresAt: editExpiresAt,
+        }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const updated: DocumentItem = await res.json();
+
+      setDocuments((current) => {
+        const next = current.map((d) => (d.id === id ? updated : d));
+        next.sort(sortByUrgency);
+        return next;
+      });
+
+      cancelEdit();
+      bumpRequirements();
+    } catch (e: any) {
+      setDocuments(prev);
+      alert(e?.message ?? "Update failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadPdf(id: string, file: File) {
+    if (!file) return;
+
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      alert("Only PDF files are allowed.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Max file size is 10MB.");
+      return;
+    }
+
+    setUploadingId(id);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await authFetch(`/api/v1/documents/${id}/upload`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const updated: DocumentItem = await res.json();
+
+      setDocuments((current) => {
+        const next = current.map((d) => (d.id === id ? updated : d));
+        next.sort(sortByUrgency);
+        return next;
+      });
+
+      bumpRequirements();
+    } catch (e: any) {
+      alert(e?.message ?? "Upload failed");
+    } finally {
+      setUploadingId(null);
+    }
+  }
+
+  async function removePdf(id: string) {
+    const ok = confirm("Remove the attached file?");
+    if (!ok) return;
+
+    try {
+      const res = await authFetch(`/api/v1/documents/${id}/file`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await res.text());
+
+      const updated: DocumentItem = await res.json();
+      setDocuments((current) => {
+        const next = current.map((d) => (d.id === id ? updated : d));
+        next.sort(sortByUrgency);
+        return next;
+      });
+    } catch (e: any) {
+      alert(e?.message ?? "Remove file failed");
+    }
+  }
+
+  async function downloadPdf(id: string, fileName?: string | null) {
+    try {
+      const res = await authFetch(`/api/v1/documents/${id}/file`);
+      if (!res.ok) throw new Error(await res.text());
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName || "document.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e?.message ?? "Download failed");
+    }
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-600">Manage passports in <a className="underline" href="/profile">Profile</a>.</p>
+          <p className="mt-2 text-sm text-gray-600">
+            {loading ? "Loading your profile..." : <>Logged in as <span className="font-medium">{email}</span></>}
+          </p>
+        </div>
+      </div>
+
+      {/* 1) Passports */}
+      {/* 2) Active Project */}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+      <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
+        </div>
+
+        <div className="space-y-6">
+
+      <UniversityRequirementsCard authFetch={authFetch} />
+
+      <NextStepsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
+        </div>
+      </div>
+
+{/* 3) Requirements */}
+{/* Add document */}
+      
+
+      {/* Documents list */}
+      
+      <div className="mt-6">
+<div className="rounded-2xl border bg-white p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Document vault</h2>
+        <p className="mt-1 text-sm text-gray-600">Store documents, track expiry dates, and attach PDFs.</p>
+
+        <details className="mt-4 rounded-xl border bg-gray-50 p-4">
+          <summary className="cursor-pointer text-sm font-medium">+ Add a document</summary>
+
+          <form onSubmit={createDocument} className="mt-4 grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="text-sm font-medium">Title</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                placeholder="e.g., Student visa"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+              >
+                <option value="visa">Visa</option>
+                <option value="residence_permit">Residence permit</option>
+                <option value="eta">Authorization</option>
+                <option value="insurance">Insurance</option>
+                <option value="contract">Contract</option>
+                <option value="passport">Passport</option>
+                <option value="enrollment">Enrollment</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">Expiry date</label>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="mt-1 w-full rounded-lg border px-3 py-2"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-3">
+              <button
+                type="submit"
+                disabled={creating}
+                className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {creating ? "Adding…" : "Add document"}
+              </button>
+            </div>
+          </form>
+        </details>
+
+          <button
+            onClick={loadDocuments}
+            className="rounded-xl border px-3 py-1.5 hover:bg-gray-50 text-sm"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {docsLoading ? (
+          <p className="mt-4 text-sm text-gray-600">Loading documents...</p>
+        ) : docsError ? (
+          <p className="mt-4 text-sm text-red-700">{docsError}</p>
+        ) : documents.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-600">No documents yet.</p>
+        ) : (
+          <ul className="mt-4 divide-y">
+            {documents.map((d) => {
+              const left = daysUntil(d.expiresAt);
+              const urgency = getUrgency(left);
+              const isEditing = editingId === d.id;
+              const isUploading = uploadingId === d.id;
+
+              return (
+                <li key={d.id} className="py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-medium">{d.title}</p>
+                      <p className="text-xs text-gray-600">
+                        Type: {d.type} • Expires: {new Date(d.expiresAt).toLocaleDateString()}
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        PDF:{" "}
+                        {d.fileName ? (
+                          <>
+                            <span className="font-medium">{d.fileName}</span>
+                            {d.fileSize ? <span> • {formatBytes(d.fileSize)}</span> : null}
+                          </>
+                        ) : (
+                          "none"
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className={`rounded-full border px-3 py-1 text-xs font-medium ${urgency.cls}`}>
+                        {urgency.label}
+                      </span>
+
+                      {!isEditing ? (
+                        <button
+                          onClick={() => startEdit(d)}
+                          className="rounded-xl border px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+
+                      <button
+                        onClick={() => deleteDocument(d.id)}
+                        className="rounded-xl border px-3 py-1.5 text-xs hover:bg-gray-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <label className="text-xs">
+                      <span className="mr-2 text-gray-600">Attach PDF:</span>
+                      <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        disabled={isUploading}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadPdf(d.id, f);
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+
+                    {d.fileName ? (
+                      <>
+                        <button
+                          onClick={() => downloadPdf(d.id, d.fileName)}
+                          className="rounded-xl border px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >
+                          Download
+                        </button>
+                        <button
+                          onClick={() => removePdf(d.id)}
+                          className="rounded-xl border px-3 py-1.5 text-xs hover:bg-gray-50"
+                        >
+                          Remove file
+                        </button>
+                      </>
+                    ) : null}
+
+                    {isUploading ? (
+                      <span className="text-xs text-gray-600">Uploading...</span>
+                    ) : null}
+                  </div>
+
+                  {isEditing ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                      <div className="md:col-span-1">
+                        <label className="text-xs font-medium text-gray-600">Title</label>
+                        <input
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="md:col-span-1">
+                        <label className="text-xs font-medium text-gray-600">Type</label>
+                        <select
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          value={editType}
+                          onChange={(e) => setEditType(e.target.value)}
+                        >
+                          <option value="visa">Visa</option>
+                          <option value="residence_permit">Residence permit</option>
+                          <option value="insurance">Insurance</option>
+                          <option value="contract">Contract</option>
+                          <option value="passport">Passport</option>
+                          <option value="enrollment">Enrollment</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-1">
+                        <label className="text-xs font-medium text-gray-600">Expiry date</label>
+                        <input
+                          className="mt-1 w-full rounded-xl border px-3 py-2"
+                          type="date"
+                          value={editExpiresAt}
+                          onChange={(e) => setEditExpiresAt(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="md:col-span-3 flex gap-2">
+                        <button
+                          onClick={() => saveEdit(d.id)}
+                          disabled={saving}
+                          className="rounded-xl bg-black px-4 py-2 text-white hover:opacity-90 disabled:opacity-60 text-sm"
+                        >
+                          {saving ? "Saving..." : "Save"}
+                        </button>
+
+                        <button
+                          onClick={cancelEdit}
+                          disabled={saving}
+                          className="rounded-xl border px-4 py-2 hover:bg-gray-50 text-sm disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-500">
+        API: <span className="font-mono">{API_BASE_URL}</span>
+      </p>
+    </div>
+  );
+}

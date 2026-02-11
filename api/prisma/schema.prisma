@@ -6,17 +6,34 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
-  password  String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
 
-  documents Document[]
-  passports Passport[]
-  projects  MobilityProject[]
+enum Role {
+  USER
+  UNIVERSITY
+  ADMIN
 }
+
+
+
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String
+  role         Role     @default(USER)
+  universityId String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  documents    Document[]
+  passports    Passport[]
+  projects     MobilityProject[]
+  university   University? @relation(fields: [universityId], references: [id])
+}
+
+
+
 
 model Document {
   id        String   @id @default(uuid())
@@ -26,13 +43,13 @@ model Document {
   createdAt DateTime @default(now())
 
   // File metadata (optional)
-  filePath  String?
-  fileName  String?
-  fileMime  String?
-  fileSize  Int?
+  filePath String?
+  fileName String?
+  fileMime String?
+  fileSize Int?
 
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([type])
@@ -41,41 +58,41 @@ model Document {
 model Passport {
   id          String   @id @default(uuid())
   countryCode String
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  @@index([userId])
   @@unique([userId, countryCode])
+  @@index([userId])
 }
 
 model MobilityProject {
-  id                String   @id @default(uuid())
+  id                 String   @id @default(uuid())
   destinationCountry String
-  purpose           String
-  startDate         DateTime
-  endDate           DateTime
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  purpose            String
+  startDate          DateTime
+  endDate            DateTime
+  isActive           Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
 
 model RequirementRule {
   id                 String  @id @default(uuid())
-  passportCountry     String
-  destinationCountry  String
-  purpose             String
-  requiredType        String
-  title               String
-  notes               String?
-  minDays             Int?
-  maxDays             Int?
+  passportCountry    String
+  destinationCountry String
+  purpose            String
+  requiredType       String
+  title              String
+  notes              String?
+  minDays            Int?
+  maxDays            Int?
 
   @@index([passportCountry, destinationCountry, purpose])
 }
@@ -90,4 +107,60 @@ model Country {
 model StudyPurpose {
   key   String @id
   label String
+}
+
+enum RequirementPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RequirementKind {
+  REQUIRED
+  INFO
+}
+
+enum StayMode {
+  SHORT
+  LONG
+  ANY
+}
+
+model University {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  countryCode String
+  city        String?
+  websiteUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requirements UniversityRequirement[]
+  users User[]
+}
+
+
+model UniversityRequirement {
+  id           String     @id @default(cuid())
+  universityId String
+  university   University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?
+  kind        RequirementKind     @default(REQUIRED)
+  priority    RequirementPriority @default(MEDIUM)
+  stayMode    StayMode            @default(ANY)
+
+  dueDate       DateTime?
+  dueDaysBefore Int?
+
+  ctaLabel String?
+  ctaUrl   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([universityId])
+  @@index([stayMode, kind])
 }

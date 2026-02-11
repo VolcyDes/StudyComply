@@ -16,6 +16,44 @@ import { fetchUserDocumentsWith, documentsTypeSet } from "@/lib/documents/api";
 import { isChecklistItemDone, isChecklistItemAutoDone } from "@/lib/dashboard/checklistDone";
 import type { ChecklistItemId } from "@/lib/dashboard/checklistMapping";
 
+
+type AuthFetchLike =
+  | ((path: string, init?: RequestInit) => Promise<Response>)
+  | ((path: string, init?: RequestInit) => Promise<{ res: Response; data: any }>);
+
+async function toResData(out: Response | { res: Response; data: any }) {
+  if (out instanceof Response) {
+    const res = out;
+    const ct = res.headers.get("content-type") || "";
+    let data: any = null;
+    try {
+      if (ct.includes("application/json")) data = await res.clone().json();
+      else data = await res.clone().text();
+    } catch {
+      data = null;
+    }
+    return { res, data };
+  }
+  return out;
+}
+
+async function toResOnly(authFetch: AuthFetchLike, path: string, init?: RequestInit): Promise<Response> {
+  const out = await authFetch(path, init);
+  return out instanceof Response ? out : out.res;
+}
+
+
+function errMsg(data: any, fallback: string) {
+  if (typeof data === "string" && data.trim()) return data;
+  if (data && typeof data === "object" && typeof data.message === "string") return data.message;
+  try {
+    const s = JSON.stringify(data ?? {});
+    return s === "{}" ? fallback : s;
+  } catch {
+    return fallback;
+  }
+}
+
 type EntryResult =
   | { destination: "SCHENGEN"; status: "FREE"; basedOn: string; message: string }
   | {
@@ -386,7 +424,7 @@ export function NextStepsCard({
   refreshKey,
   onDocumentCreated,
 }: {
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+  authFetch: AuthFetchLike;
   refreshKey: number;
   onDocumentCreated?: () => void;
 }) {
@@ -543,12 +581,12 @@ export function NextStepsCard({
         setDocsLoading(true);
         setDocsErr(null);
 
-        const res = await authFetch("/api/v1/documents", { method: "GET" });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(txt || `Failed to fetch documents (${res.status})`);
+        const r = await toResData(await authFetch("/api/v1/documents", { method: "GET" }));
+        if (!r.res.ok) {
+          const txt = errMsg(r.data, '').catch(() => "");
+          throw new Error(txt || `Failed to fetch documents (${r.res.status})`);
         }
-        const json = await res.json();
+        const json = r.data;
         const arr = Array.isArray(json) ? json : Array.isArray((json as any)?.items) ? (json as any).items : [];
         setDocs(arr as UserDocument[]);
       } catch (e: any) {
@@ -638,16 +676,17 @@ const isInfo = level === "INFO";
           )}&stayBucket=${encodeURIComponent(stayBucket)}`
         );
 
-        const docsPromise = fetchUserDocumentsWith(authFetch);
+        const docsPromise = fetchUserDocumentsWith((p,i)=>toResOnly(authFetch,p,i));
 
         const [travelRes, docs] = await Promise.all([travelPromise, docsPromise]);
+        const travelResOnly = travelRes instanceof Response ? travelRes : travelRes.res;
 
-        if (!travelRes.ok) {
-          const txt = await travelRes.text();
-          throw new Error(txt || `Failed (${travelRes.status})`);
+        if (!travelResOnly.ok) {
+          const txt = await travelResOnly.text();
+          throw new Error(txt || `Failed (${travelResOnly.status})`);
         }
 
-        const json = (await travelRes.json()) as EntryResult;
+        const json = (await travelResOnly.json()) as EntryResult;
 
         setData(json);
         setStep(computeNextStep(json, localStorage.getItem("activeProjectStayBucket") || "SHORT"));
@@ -724,7 +763,7 @@ const isInfo = level === "INFO";
       setCreating(true);
       setErr(null);
 
-      const res = await authFetch("/api/v1/documents", {
+      const r = await toResData(await authFetch("/api/v1/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -732,16 +771,15 @@ const isInfo = level === "INFO";
           type: mapCreateDocTypeToBackend(step.createDoc.type),
           expiresAt: docExpires.trim(),
         }),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || ("Failed (" + String(res.status) + ")"));
+      }));
+      if (!r.res.ok) {
+        const txt = errMsg(r.data, '');
+        throw new Error(txt || ("Failed (" + String(r.res.status) + ")"));
       }
 
       // Refresh docs types so checklist auto-updates immediately
       try {
-        const docs = await fetchUserDocumentsWith(authFetch);
+        const docs = await fetchUserDocumentsWith((p,i)=>toResOnly(authFetch,p,i));
         setDocTypes(documentsTypeSet(docs));
       } catch {}
 
@@ -759,7 +797,7 @@ const isInfo = level === "INFO";
 
       onDocumentCreated?.();
     } catch (e: any) {
-      setErr((e && (e.message || e.toString())) || "Failed to create document");
+      setErr((e && (e.message || e.toString()) || "Failed to create document"));
     } finally {
       setCreating(false);
     }
@@ -768,7 +806,7 @@ const isInfo = level === "INFO";
   // Helper: compute "done" with auto-done for known checklist ids, else fallback manual
   const resolvedDone = (itemId: string): boolean => {
     const id = itemId as ChecklistItemId;
-    // only apply auto-done for ids we map (eta/esta/visa/...); otherwise fallback to doneMap
+    // only apply auto-done for ids we map (eta/esta/visa/...)); otherwise fallback to doneMap
     if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
       return isChecklistItemDone(id, docTypes, doneMap);
     }
@@ -1063,8 +1101,7 @@ return (
                         </button>
                       </div>
                     </li>
-                  ))}
-                </ul>
+                  ))}                </ul>
               )}
             </div>
 

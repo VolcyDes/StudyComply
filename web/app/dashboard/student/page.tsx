@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-
-import { useEffect, useState } from "react";
-import { UniversityCombobox } from "../_components/UniversityCombobox";
-import { UniversityRequirementsCard } from "../_components/UniversityRequirementsCard";
 import { useRouter } from "next/navigation";
+
+import { authFetch as libAuthFetch } from "@/lib/authFetch";
 import { API_BASE_URL } from "../../../lib/config";
 
 import PassportsSection from "../_components/PassportsSection";
 import ProjectSection from "../_components/ProjectSection";
 import { NextStepsCard } from "../_components/NextStepsCard";
+import UniversityRequirementsCard from "../_components/UniversityRequirementsCard";
+
 type MeResponse = {
   user: { id: string; email: string; createdAt: string; updatedAt: string };
 };
@@ -70,66 +70,46 @@ function formatBytes(bytes?: number | null) {
 }
 
 export default function DashboardPage() {
-  const [uniSlug, setUniSlug] = React.useState<string>("ucsd");
   const router = useRouter();
 
-  const [email, setEmail] = useState<string>("...");
-  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = React.useState<string>("...");
+  const [loading, setLoading] = React.useState(true);
 
-  const [docsLoading, setDocsLoading] = useState(true);
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [docsError, setDocsError] = useState<string | null>(null);
+  const [docsLoading, setDocsLoading] = React.useState(true);
+  const [documents, setDocuments] = React.useState<DocumentItem[]>([]);
+  const [docsError, setDocsError] = React.useState<string | null>(null);
 
   // Add form
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState("visa");
-  const [expiresAt, setExpiresAt] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [title, setTitle] = React.useState("");
+  const [type, setType] = React.useState("visa");
+  const [expiresAt, setExpiresAt] = React.useState("");
+  const [creating, setCreating] = React.useState(false);
 
   // Edit state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editType, setEditType] = useState("visa");
-  const [editExpiresAt, setEditExpiresAt] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [editTitle, setEditTitle] = React.useState("");
+  const [editType, setEditType] = React.useState("visa");
+  const [editExpiresAt, setEditExpiresAt] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
 
   // Upload state
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = React.useState<string | null>(null);
 
   // refresh hook for requirements
-  const [requirementsRefreshKey, setRequirementsRefreshKey] = useState(0);
+  const [requirementsRefreshKey, setRequirementsRefreshKey] = React.useState(0);
   function bumpRequirements() {
     setRequirementsRefreshKey((x) => x + 1);
   }
 
-  async function authFetch(path: string, init?: RequestInit) {
-    const t = localStorage.getItem("token");
-    if (!t) {
-      router.push("/login");
-      return new Response(null, { status: 401 });
-    }
-
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers: {
-        ...(init?.headers ?? {}),
-        Authorization: `Bearer ${t}`,
-      },
-    });
-
-    if (res.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      router.push("/login");
-      throw new Error("Unauthorized");
-    }
-
-    return res;
-  }
+  const authFetchRes = React.useCallback(
+    (path: string, init?: RequestInit) => libAuthFetch(path, init).then((r) => r.res),
+    [],
+  );
 
   async function loadMe() {
-    const res = await authFetch("/api/v1/me");
-    const data: MeResponse = await res.json();
+    const r = await libAuthFetch("/api/v1/me");
+    const data: MeResponse = r.data;
+    if (!r.res.ok) throw new Error((data as any)?.message ?? "Failed to load me");
     setEmail(data.user.email);
   }
 
@@ -138,8 +118,9 @@ export default function DashboardPage() {
     setDocsLoading(true);
 
     try {
-      const res = await authFetch("/api/v1/documents");
-      const data: DocumentItem[] = await res.json();
+      const r = await libAuthFetch("/api/v1/documents");
+      const data: DocumentItem[] = (r.data ?? []);
+      if (!r.res.ok) throw new Error((r.data as any)?.message ?? "Failed to load documents");
       data.sort(sortByUrgency);
       setDocuments(data);
     } catch (e: any) {
@@ -149,7 +130,7 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
+  React.useEffect(() => {
     async function boot() {
       try {
         const t = localStorage.getItem("token");
@@ -168,19 +149,20 @@ export default function DashboardPage() {
   }, [router]);
 
   async function createDocumentRaw(args: { title: string; type: string; expiresAt: string }) {
-    const res = await authFetch("/api/v1/documents", {
+    const res = await libAuthFetch("/api/v1/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(args),
     });
 
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(msg || `Create failed (${res.status})`);
+    if (!res.res.ok) {
+      const msg = (res.data as any)?.message ?? JSON.stringify(res.data ?? {});
+      throw new Error(msg || `Create failed ()`);
     }
 
-    const created: DocumentItem = await res.json();
-    setDocuments((prev) => {
+    const created: DocumentItem = (res.data as any);
+    if (!res.res.ok) throw new Error((res.data as any)?.message ?? "Failed to create document");
+setDocuments((prev) => {
       const next = [...prev, created];
       next.sort(sortByUrgency);
       return next;
@@ -222,10 +204,10 @@ export default function DashboardPage() {
     if (editingId === id) setEditingId(null);
 
     try {
-      const res = await authFetch(`/api/v1/documents/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || `Delete failed (${res.status})`);
+      const res = await libAuthFetch(`/api/v1/documents/${id}`, { method: "DELETE" });
+      if (!res.res.ok) {
+        const msg = (res.data as any)?.message ?? JSON.stringify(res.data ?? {});
+        throw new Error(msg || `Delete failed ()`);
       }
       bumpRequirements();
     } catch (e: any) {
@@ -269,7 +251,7 @@ export default function DashboardPage() {
     });
 
     try {
-      const res = await authFetch(`/api/v1/documents/${id}`, {
+      const res = await libAuthFetch(`/api/v1/documents/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -279,11 +261,11 @@ export default function DashboardPage() {
         }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.res.ok) throw new Error(((res.data as any)?.message ?? JSON.stringify(res.data ?? {})) as any);
 
-      const updated: DocumentItem = await res.json();
-
-      setDocuments((current) => {
+      const updated: DocumentItem = (res.data as any);
+      if (!res.res.ok) throw new Error((res.data as any)?.message ?? "Failed to update document");
+setDocuments((current) => {
         const next = current.map((d) => (d.id === id ? updated : d));
         next.sort(sortByUrgency);
         return next;
@@ -317,16 +299,16 @@ export default function DashboardPage() {
       const form = new FormData();
       form.append("file", file);
 
-      const res = await authFetch(`/api/v1/documents/${id}/upload`, {
+      const res = await libAuthFetch(`/api/v1/documents/${id}/upload`, {
         method: "POST",
         body: form,
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.res.ok) throw new Error(((res.data as any)?.message ?? JSON.stringify(res.data ?? {})) as any);
 
-      const updated: DocumentItem = await res.json();
-
-      setDocuments((current) => {
+      const updated: DocumentItem = (res.data as any);
+      if (!res.res.ok) throw new Error((res.data as any)?.message ?? "Failed to upload");
+setDocuments((current) => {
         const next = current.map((d) => (d.id === id ? updated : d));
         next.sort(sortByUrgency);
         return next;
@@ -345,11 +327,12 @@ export default function DashboardPage() {
     if (!ok) return;
 
     try {
-      const res = await authFetch(`/api/v1/documents/${id}/file`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      const res = await libAuthFetch(`/api/v1/documents/${id}/file`, { method: "DELETE" });
+      if (!res.res.ok) throw new Error(((res.data as any)?.message ?? JSON.stringify(res.data ?? {})) as any);
 
-      const updated: DocumentItem = await res.json();
-      setDocuments((current) => {
+      const updated: DocumentItem = (res.data as any);
+      if (!res.res.ok) throw new Error((res.data as any)?.message ?? "Failed to remove file");
+setDocuments((current) => {
         const next = current.map((d) => (d.id === id ? updated : d));
         next.sort(sortByUrgency);
         return next;
@@ -361,10 +344,10 @@ export default function DashboardPage() {
 
   async function downloadPdf(id: string, fileName?: string | null) {
     try {
-      const res = await authFetch(`/api/v1/documents/${id}/file`);
-      if (!res.ok) throw new Error(await res.text());
+      const res = await libAuthFetch(`/api/v1/documents/${id}/file`);
+      if (!res.res.ok) throw new Error(((res.data as any)?.message ?? JSON.stringify(res.data ?? {})) as any);
 
-      const blob = await res.blob();
+      const blob = await res.res.blob();
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement("a");
@@ -397,19 +380,21 @@ export default function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-      <ProjectSection authFetch={authFetch} onChanged={bumpRequirements} />
+      <PassportsSection authFetch={authFetchRes} />
+      <ProjectSection authFetch={authFetchRes} onChanged={bumpRequirements} />
         </div>
 
         <div className="space-y-6">
 
-      <NextStepsCard authFetch={authFetch} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
+      <UniversityRequirementsCard authFetch={libAuthFetch} />
+
+      <NextStepsCard authFetch={authFetchRes} refreshKey={requirementsRefreshKey} onDocumentCreated={() => { loadDocuments(); bumpRequirements(); }} />
         </div>
       </div>
 
 {/* 3) Requirements */}
 {/* Add document */}
       
-
 
       {/* Documents list */}
       
@@ -474,7 +459,6 @@ export default function DashboardPage() {
             </div>
           </form>
         </details>
-
 
           <button
             onClick={loadDocuments}
@@ -643,12 +627,12 @@ export default function DashboardPage() {
           </ul>
         )}
       </div>
-      </div>
-
 
       <p className="text-xs text-gray-500">
         API: <span className="font-mono">{API_BASE_URL}</span>
       </p>
     </div>
+    </div>
   );
+
 }

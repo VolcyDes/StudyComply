@@ -11,9 +11,11 @@ import { MetaModule } from './meta/meta.module';
 import { PassportsModule } from './passports/passports.module';
 import { ProjectsModule } from './projects/projects.module';
 import { RequirementsModule } from './requirements/requirements.module';
+import { UniversitiesModule } from "./universities/universities.module";
+import { AdminModule } from "./admin/admin.module";
 
 @Module({
-  imports: [
+  imports: ([
     PrismaModule,
     AuthModule,
     DocumentsModule,
@@ -21,7 +23,9 @@ import { RequirementsModule } from './requirements/requirements.module';
     PassportsModule,
     ProjectsModule,
     RequirementsModule,
-  ],
+    UniversitiesModule,
+    AdminModule,
+  ].filter((m): m is any => Boolean(m)) as any),
   controllers: [AppController, HealthController],
   providers: [AppService],
 })

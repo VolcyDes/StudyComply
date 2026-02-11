@@ -88,7 +88,9 @@ export type EntryResult = {
 export function evaluateEntry(destination: DestinationZone, passports: string[], stayBucket: StayBucket = "SHORT"): EntryResult {
 
   const passport = (passports?.[0] ?? "").toUpperCase();
-  // CANADA_LONG_STAY_REQUIRED_DOCS_V3
+  
+  const longStay = stayBucket !== "SHORT";
+// CANADA_LONG_STAY_REQUIRED_DOCS_V3
   // Long stays in Canada: Study Permit is the main requirement.
   // eTA is only for boarding a flight (INFO), not a long-stay authorization.
   if (destination === "CANADA" && longStay) {
