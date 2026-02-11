@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
 const TOKEN_KEY = "token";
 
@@ -55,14 +54,22 @@ export default function LoginPage() {
     try {
       const token = await login(email.trim(), password);
       window.localStorage.setItem(TOKEN_KEY, token);
-
       const me = await fetchMe(token);
 
-      if (me?.role === "UNIVERSITY") {
-        router.push("/dashboard/university");
-      } else {
-        router.push("/dashboard/student");
+      // ✅ Persist account kind for proxy routing/guard (both roles)
+      const kind = me?.role === "UNIVERSITY" ? "UNIVERSITY" : "STUDENT";
+      try {
+        // 30 days
+        const maxAge = 60 * 60 * 24 * 30;
+        const secure = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
+        document.cookie = `sc_account_kind=${kind}; Path=/; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+        window.localStorage.setItem("sc_account_kind", kind);
+      } catch {
+        // ignore
       }
+
+      router.push(kind === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+
     } catch (err: any) {
       setError(err?.message ?? "Erreur");
     } finally {
