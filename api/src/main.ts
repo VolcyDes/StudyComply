@@ -2,6 +2,10 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import compression from 'compression';
+import { ValidationPipe } from '@nestjs/common';
 
 function parseOrigins(raw?: string) {
   if (!raw) return [];
@@ -14,7 +18,23 @@ function parseOrigins(raw?: string) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // ✅ Behind reverse proxy (Railway/Render/Fly/NGINX)
+  (app as any).set('trust proxy', 1);
+
+  // ✅ If behind a reverse proxy (prod hosting)
+  
+
   const allowed = parseOrigins(process.env.ALLOWED_ORIGINS);
+
+  // ✅ Security + perf baseline
+  app.use(helmet());
+  app.use(compression());
+
+  // ✅ DTO validation (reject unknown fields)
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
+
+  // ✅ Parse cookies (needed for sc_token)
+  app.use(cookieParser());
 
   app.enableCors({
     origin: (origin, cb) => {
@@ -32,7 +52,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
   });
 
   // === Swagger (DEV ONLY) ===

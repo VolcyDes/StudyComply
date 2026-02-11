@@ -56,3 +56,6 @@ web/web@*
 # Temp API rules (WIP)
 api/src/rules/
 
+.env
+api/.env
+web/.env

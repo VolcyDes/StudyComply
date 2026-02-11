@@ -3,40 +3,27 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
-const TOKEN_KEY = "token";
-
 async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
-    credentials: "include",
+    credentials: "include", // ✅ cookie auth
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message ?? "Login failed");
-  }
-
-  if (!data?.token) {
-    throw new Error("No token returned by API");
-  }
-
-  return data.token as string;
+  if (!res.ok) throw new Error(data?.message ?? "Login failed");
+  return true;
 }
 
-async function fetchMe(token: string) {
+async function fetchMe() {
   const res = await fetch(`${API_BASE}/api/v1/me`, {
-    headers: { Authorization: `Bearer ${token}` },
-    credentials: "include",
+    credentials: "include", // ✅ cookie auth
     cache: "no-store",
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data?.message ?? "Failed to fetch /me");
-  }
-
+  if (!res.ok) throw new Error(data?.message ?? "Failed to fetch /me");
   return data.user;
 }
 
@@ -54,8 +41,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const token = await login(email.trim(), password);
-      const me = await fetchMe(token);
+      await login(email.trim(), password);
+      const me = await fetchMe();
 
       // ✅ Persist account kind for proxy routing/guard (both roles)
       const kind = me?.role === "UNIVERSITY" ? "UNIVERSITY" : "STUDENT";

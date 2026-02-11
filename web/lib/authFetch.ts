@@ -1,8 +1,8 @@
 import { API_BASE_URL } from "./config";
 
 /**
- * Prod auth: HttpOnly cookie (sc_token)
- * -> Always use credentials: "include"
+ * Prod auth: HttpOnly cookie (sc_token).
+ * Always include credentials.
  */
 export async function authFetch(
   path: string,
@@ -10,7 +10,6 @@ export async function authFetch(
 ): Promise<{ res: Response; data: any }> {
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    // keep any incoming headers
     headers: { ...(init?.headers ?? {}) },
     credentials: "include",
   });
