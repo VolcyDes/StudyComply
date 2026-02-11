@@ -8,6 +8,7 @@ const TOKEN_KEY = "token";
 async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
@@ -27,6 +28,7 @@ async function login(email: string, password: string) {
 async function fetchMe(token: string) {
   const res = await fetch(`${API_BASE}/api/v1/me`, {
     headers: { Authorization: `Bearer ${token}` },
+    credentials: "include",
     cache: "no-store",
   });
 
@@ -53,7 +55,6 @@ export default function LoginPage() {
 
     try {
       const token = await login(email.trim(), password);
-      window.localStorage.setItem(TOKEN_KEY, token);
       const me = await fetchMe(token);
 
       // ✅ Persist account kind for proxy routing/guard (both roles)
@@ -62,8 +63,6 @@ export default function LoginPage() {
         // 30 days
         const maxAge = 60 * 60 * 24 * 30;
         const secure = typeof window !== "undefined" && window.location?.protocol === "https:" ? "; Secure" : "";
-        document.cookie = `sc_account_kind=${kind}; Path=/; SameSite=Lax; Max-Age=${maxAge}${secure}`;
-        window.localStorage.setItem("sc_account_kind", kind);
       } catch {
         // ignore
       }
