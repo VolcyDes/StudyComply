@@ -28,3 +28,13 @@ pnpm-debug.log*
 
 # local flags pack
 public/flags/
+
+# build / deps
+node_modules/
+.next/
+
+# local backups
+_bak/
+.backups/
+*.bak
+*.bak.*

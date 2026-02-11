@@ -156,7 +156,6 @@ function isDismissed(docId: string, dismissedMap: Record<string, string>): boole
 }
 
 
-
 function buildChecklist(args: {
   destinationIso2: string;
   passportChoice: string;
@@ -583,9 +582,9 @@ export function NextStepsCard({
 
         const r = await toResData(await authFetch("/api/v1/documents", { method: "GET" }));
         if (!r.res.ok) {
-          const txt = errMsg(r.data, '').catch(() => "");
+          const txt = errMsg(r.data, "");
           throw new Error(txt || `Failed to fetch documents (${r.res.status})`);
-        }
+      }
         const json = r.data;
         const arr = Array.isArray(json) ? json : Array.isArray((json as any)?.items) ? (json as any).items : [];
         setDocs(arr as UserDocument[]);
@@ -729,17 +728,37 @@ const isInfo = level === "INFO";
   const displayStep = renewalStep ?? step;
 
 
-
   const urgencyLabel =
     displayStep?.urgency === "HIGH" ? "High" :
     displayStep?.urgency === "MEDIUM" ? "Medium" :
     displayStep?.urgency === "LOW" ? "Low" :
     "Info";
+      // Helper: compute "done" with auto-done for known checklist ids, else fallback manual
+      const resolvedDone = (itemId: string): boolean => {
+        const id = itemId as ChecklistItemId;
+        // only apply auto-done for ids we map (eta/esta/visa/...)); otherwise fallback to doneMap
+        if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
+          return isChecklistItemDone(id, docTypes, doneMap);
+        }
+        return !!doneMap?.[itemId];
+      };
+    
+      const resolvedAutoDone = (itemId: string): boolean => {
+        const id = itemId as ChecklistItemId;
+        if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
+          return isChecklistItemAutoDone(id, docTypes);
+        }
+        return false;
+      };
 
-  const canCreate = !!displayStep && !(displayStep?.createDoc?.type && doneMap[displayStep.createDoc.type.toLowerCase()]);
+
+  const canCreate = !!displayStep && !(displayStep?.createDoc?.type && resolvedDone(displayStep.createDoc.type.toLowerCase()));
 
   const openCreateModal = () => {
     setErr(null);
+    if (displayStep?.createDoc?.type && resolvedDone(displayStep.createDoc.type.toLowerCase())) {
+      return;
+    }
     setDocTitle(step?.createDoc?.title ?? "");
     setDocExpires(suggestedDateForCreate(displayStep?.createDoc?.type));
     setCreateOpen(true);
@@ -802,24 +821,7 @@ const isInfo = level === "INFO";
       setCreating(false);
     }
   };
-
-  // Helper: compute "done" with auto-done for known checklist ids, else fallback manual
-  const resolvedDone = (itemId: string): boolean => {
-    const id = itemId as ChecklistItemId;
-    // only apply auto-done for ids we map (eta/esta/visa/...)); otherwise fallback to doneMap
-    if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
-      return isChecklistItemDone(id, docTypes, doneMap);
-    }
-    return !!doneMap?.[itemId];
-  };
-
-  const resolvedAutoDone = (itemId: string): boolean => {
-    const id = itemId as ChecklistItemId;
-    if (itemId === "eta" || itemId === "esta" || itemId === "visa" || itemId === "study_permit" || itemId === "biometrics" || itemId === "medical_exam" || itemId === "letter_of_acceptance") {
-      return isChecklistItemAutoDone(id, docTypes);
-    }
-    return false;
-  };  // Persist dismissed alerts map
+  // Persist dismissed alerts map
   useEffect(() => {
     if (!mounted) return;
     try {
@@ -839,7 +841,6 @@ const isInfo = level === "INFO";
       return next;
     });
   }
-
 
 
   
@@ -952,14 +953,13 @@ return (
             </p>
           ) : null}
 
-          {canCreate ? (
-            <button
-              onClick={openCreateModal}
-              className="mt-3 inline-flex rounded-xl bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
-            >
-              {displayStep.ctaLabel ?? "Create document"}
-            </button>
-          ) : null}
+          <button
+            onClick={openCreateModal}
+            disabled={!canCreate}
+            className="mt-3 inline-flex rounded-xl bg-black px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-60"
+          >
+            {displayStep?.ctaLabel ?? "Create document"}
+          </button>
         </div>
       )}
 
