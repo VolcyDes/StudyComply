@@ -1,78 +1,102 @@
-import { Body, Controller, Post, Res } from "@nestjs/common";
-import type { Response } from "express";
-import { Throttle } from "@nestjs/throttler";
-import { AuthService } from "./auth.service";
+import { Body, Controller, Post, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { AuthService } from './auth.service';
 
-@Controller("api/v1/auth")
+@Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post("register")
-  register(
-    @Body()
-    body: { email: string; password: string; role?: "USER" | "UNIVERSITY"; universitySlug?: string }
-  ) {
-    return this.authService.register(body.email, body.password, body.role, body.universitySlug);
-  }
-
-  // ✅ Stronger rate-limit for brute-force protection
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  @Post("login")
+  @Post('login')
   async login(
     @Body() body: { email: string; password: string },
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const out: any = await this.authService.login(body.email, body.password);
+    const out = await this.authService.login(body.email, body.password);
+    const isProd = process.env.NODE_ENV === 'production';
 
-    const token: string | undefined = out?.token;
-    if (token) {
-      const isProd = process.env.NODE_ENV === "production";
+    // access token cookie
+    res.cookie('sc_token', out.token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
-      // HttpOnly session cookie (JWT)
-      res.cookie("sc_token", token, {
+    // refresh token cookie (AuthService.login returns refreshToken)
+    const refreshToken = (out as any).refreshToken as string | undefined;
+    if (refreshToken) {
+      res.cookie('sc_rt', refreshToken, {
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: 'lax',
         secure: isProd,
-        path: "/",
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        path: '/',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
       });
-
-      // Account kind cookie for routing guard (client-readable)
-      const kind = String(out?.user?.role ?? out?.role ?? "").toUpperCase().trim();
-      if (kind) {
-        res.cookie("sc_account_kind", kind, {
-          httpOnly: false,
-          sameSite: "lax",
-          secure: isProd,
-          path: "/",
-          maxAge: 1000 * 60 * 60 * 24 * 30, // 30 days
-        });
-      }
     }
 
-    // keep JSON return for now
-    return out;
+    // account kind cookie
+    const kind = (out.user?.role || 'USER').toString();
+    res.cookie('sc_account_kind', kind, {
+      httpOnly: false,
+      sameSite: 'lax',
+      secure: isProd,
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    // cookies-only response
+    return { ok: true, user: out.user };
   }
 
-  @Post("logout")
-  logout(@Res({ passthrough: true }) res: Response) {
-    const isProd = process.env.NODE_ENV === "production";
+  @Post('verify-email')
+  async verifyEmail(@Body() body: { token: string }) {
+    const userId = await this.authService.verifyEmailToken(body.token);
+    await this.authService.markEmailVerified(userId);
+    return { ok: true };
+  }
 
-    res.cookie("sc_token", "", {
+  @Post('refresh')
+  async refresh(
+    @Req() req: Request,
+    @Body() body: { refreshToken?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const rt = (req as any).cookies?.sc_rt || body?.refreshToken;
+    const out = await this.authService.refresh(rt);
+
+    const isProd = process.env.NODE_ENV === 'production';
+
+    res.cookie('sc_token', out.accessToken, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: 'lax',
       secure: isProd,
-      path: "/",
-      maxAge: 0,
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.cookie("sc_account_kind", "", {
-      httpOnly: false,
-      sameSite: "lax",
+    res.cookie('sc_rt', out.refreshToken, {
+      httpOnly: true,
+      sameSite: 'lax',
       secure: isProd,
-      path: "/",
-      maxAge: 0,
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
+
+    return { ok: true };
+  }
+
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const userId = (req as any).user?.sub || (req as any).user?.id;
+
+    if (userId) {
+      await this.authService.clearRefreshTokenForUser(userId).catch(() => undefined);
+    }
+
+    res.clearCookie('sc_token', { path: '/' });
+    res.clearCookie('sc_rt', { path: '/' });
+    res.clearCookie('sc_account_kind', { path: '/' });
 
     return { ok: true };
   }
