@@ -26,7 +26,7 @@ function safeFileName(original: string) {
   return original.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-@Controller('api/v1/documents')
+@Controller('documents')
 @UseGuards(JwtAuthGuard)
 export class DocumentsController {
   constructor(

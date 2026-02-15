@@ -59,3 +59,4 @@ api/src/rules/
 .env
 api/.env
 web/.env
+*.bak.*

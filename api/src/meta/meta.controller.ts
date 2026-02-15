@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { MetaService } from './meta.service';
 
-@Controller('api/v1/meta')
+@Controller('meta')
 export class MetaController {
   constructor(private readonly meta: MetaService) {}
 

@@ -14,7 +14,7 @@ type CreateUniversityBody = {
 type UpdateUniversityBody = Partial<CreateUniversityBody>;
 
 @UseGuards(JwtAuthGuard, AdminGuard)
-@Controller("/api/v1/admin/universities")
+@Controller("admin/universities")
 export class UniversitiesAdminController {
   constructor(private readonly prisma: PrismaService) {}
 

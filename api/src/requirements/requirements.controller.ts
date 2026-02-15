@@ -6,7 +6,7 @@ import { evaluateEntry } from "./travel/engine";
 import type { DestinationZone, StayBucket } from "./travel/types";
 import { resolveUK, resolveUSA, resolveCANADA } from "src/rules/travel";
 
-@Controller('api/v1/requirements')
+@Controller('requirements')
 @UseGuards(JwtAuthGuard)
 export class RequirementsController {
   constructor(private readonly reqs: RequirementsService,

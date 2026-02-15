@@ -12,7 +12,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PassportsService } from './passports.service';
 
-@Controller('api/v1/passports')
+@Controller('passports')
 @UseGuards(JwtAuthGuard)
 export class PassportsController {
   constructor(private readonly passports: PassportsService) {}

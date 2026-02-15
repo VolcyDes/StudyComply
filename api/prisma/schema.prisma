@@ -17,6 +17,8 @@ enum Role {
 
 
 model User {
+  emailVerifiedAt DateTime?
+
   id           String   @id @default(uuid())
   email        String   @unique
   password     String
@@ -30,7 +32,12 @@ model User {
   passports    Passport[]
   projects     MobilityProject[]
   university   University? @relation(fields: [universityId], references: [id])
+
+  refreshTokenHash      String?
+  refreshTokenExpiresAt DateTime?
+
 }
+
 
 
 

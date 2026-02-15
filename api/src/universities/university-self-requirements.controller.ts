@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UniversityGuard } from '../auth/university.guard';
 
 @UseGuards(JwtAuthGuard, UniversityGuard)
-@Controller('/api/v1/university/requirements')
+@Controller('university/requirements')
 export class UniversitySelfRequirementsController {
   constructor(private readonly prisma: PrismaService) {}
 

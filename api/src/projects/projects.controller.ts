@@ -4,7 +4,7 @@ import { ProjectsService } from './projects.service';
 
 const STUDY_PURPOSES = new Set(['exchange', 'internship', 'degree', 'phd', 'language']);
 
-@Controller('api/v1/projects')
+@Controller('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
   constructor(private readonly projects: ProjectsService) {}

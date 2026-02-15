@@ -8,7 +8,7 @@ type UpdateUserRoleBody = {
   universityId?: string | null;
 };
 
-@Controller("api/v1/admin/users")
+@Controller("admin/users")
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class UsersAdminController {
   constructor(private prisma: PrismaService) {}

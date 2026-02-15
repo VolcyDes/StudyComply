@@ -2,12 +2,12 @@ import { Controller, Get, Req, UseGuards, UnauthorizedException } from '@nestjs/
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
-@Controller('api/v1')
+@Controller('me')
 export class MeController {
   constructor(private readonly prisma: PrismaService) {}
 
   @UseGuards(JwtAuthGuard)
-  @Get('me')
+  @Get()
   async me(@Req() req: any) {
     const userId = req.user?.sub;
 

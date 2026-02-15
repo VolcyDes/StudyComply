@@ -18,7 +18,7 @@ type CreateRequirementBody = {
 type UpdateRequirementBody = Partial<CreateRequirementBody>;
 
 @UseGuards(JwtAuthGuard, AdminGuard)
-@Controller("/api/v1/admin")
+@Controller("admin")
 export class RequirementsAdminController {
   constructor(private readonly prisma: PrismaService) {}
 

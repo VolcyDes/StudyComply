@@ -18,7 +18,9 @@ function parseOrigins(raw?: string) {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ Behind reverse proxy (Railway/Render/Fly/NGINX)
+  
+  app.setGlobalPrefix('api/v1');
+// ✅ Behind reverse proxy (Railway/Render/Fly/NGINX)
   (app as any).set('trust proxy', 1);
 
   // ✅ If behind a reverse proxy (prod hosting)
