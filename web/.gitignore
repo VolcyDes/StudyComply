@@ -21,3 +21,10 @@ pnpm-debug.log*
 
 # misc
 .vercel
+
+# env
+.env
+.env.*
+
+# local flags pack
+public/flags/

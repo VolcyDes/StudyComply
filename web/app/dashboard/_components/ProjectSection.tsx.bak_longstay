@@ -3,7 +3,30 @@
 import { useEffect, useState } from "react";
 import { PassportCountryCombobox } from "@/components/passport/PassportCountryCombobox";
 
-import { isSupportedDestinationIso2, iso2ToTravelDestination } from "@/lib/travelDestination";
+const MANUAL_SCHENGEN_ISO2 = new Set([
+  "AT","BE","CZ","DK","EE","FI","FR","DE","GR","HU","IS","IT","LV","LI","LT","LU",
+  "MT","NL","NO","PL","PT","SK","SI","ES","SE","CH","HR",
+]);
+
+const EXTRA_SUPPORTED_ISO2 = new Set(["US", "CA", "GB"]);
+
+function isSupportedDestinationCountry(country: any) {
+  const code = (country?.code ?? "").toUpperCase();
+  const isSchengen =
+    typeof country?.isSchengen === "boolean"
+      ? country.isSchengen
+      : MANUAL_SCHENGEN_ISO2.has(code);
+
+  return isSchengen || EXTRA_SUPPORTED_ISO2.has(code);
+}
+
+function iso2ToTravelDestinationZone(iso2: string): "SCHENGEN" | "UK" | "USA" | "CANADA" {
+  const code = (iso2 ?? "").toUpperCase();
+  if (code === "US") return "USA";
+  if (code === "CA") return "CANADA";
+  if (code === "GB") return "UK";
+  return "SCHENGEN";
+}
 type ActiveProject = {
   id: string;
   destinationCountry: string;
@@ -15,16 +38,6 @@ type ActiveProject = {
 
 function isoToDateInput(iso: string) {
   return new Date(iso).toISOString().slice(0, 10);
-}
-
-function stayDaysFromInputs(start: string, end: string): number | null {
-  if (!start || !end) return null;
-  const a = new Date(start);
-  const b = new Date(end);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
-  const ms = b.getTime() - a.getTime();
-  if (ms < 0) return null;
-  return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
 export default function ProjectSection({
@@ -42,22 +55,16 @@ export default function ProjectSection({
       code: String(c?.code ?? c?.iso2 ?? c?.id ?? "").toUpperCase(),
       name: String(c?.name ?? c?.label ?? c?.country ?? "")
     }))
-    .filter((c: any) => c.code && c.name && isSupportedDestinationIso2(c.code));
+    .filter((c: any) => c.code && c.name && isSupportedDestinationCountry(c));
   const [passports, setPassports] = useState<{ countryCode: string }[]>([]);
   const [passportChoice, setPassportChoice] = useState("BEST");
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
-const [purpose, setPurpose] = useState("exchange");
-  
-
-  const CONTROL_CLASS = "mt-1 w-full h-10 rounded-xl border px-3 text-sm";
-
+  const [purpose, setPurpose] = useState("exchange");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-
-  const stayDays = stayDaysFromInputs(startDate, endDate);
   const [saving, setSaving] = useState(false);
 
   async function load() {
@@ -199,9 +206,15 @@ const [purpose, setPurpose] = useState("exchange");
         <p className="mt-4 text-sm text-gray-600">No active project yet.</p>
       )}
 
-      <form onSubmit={saveProject} className="mt-6 grid gap-6 sm:grid-cols-2">
-        <div className="md:col-span-1 min-w-0 space-y-1">
+      <form onSubmit={saveProject} className="mt-6 grid gap-4 md:grid-cols-4">
+        <div className="md:col-span-1">
+          <div className="flex items-center justify-between gap-2">
   <label className="text-sm font-medium">Destination</label>
+  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-gray-700">
+    Zone: <span className="ml-1 font-mono">{iso2ToTravelDestinationZone(destinationCountry)}</span>
+  </span>
+</div>
+          
 <PassportCountryCombobox
   countries={supportedCountries}
   value={destinationCountry}
@@ -210,16 +223,14 @@ const [purpose, setPurpose] = useState("exchange");
     try { localStorage.setItem("activeProjectDestinationIso2", (v || "").toString().toUpperCase()); } catch {}
   }}
   placeholder="Choose a destination…"
-  triggerClassName="h-10 rounded-xl border px-3 text-sm"
 />
-          <p className="mt-2 text-xs text-gray-500">Rules: {iso2ToTravelDestination(destinationCountry)}</p>
 
         </div>
 
-        <div className="md:col-span-1 min-w-0 space-y-1">
+        <div className="md:col-span-1">
           <label className="text-sm font-medium">Purpose</label>
           <select
-            className={CONTROL_CLASS}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
             value={purpose}
             onChange={(e) => setPurpose(e.target.value)}
           >
@@ -231,7 +242,7 @@ const [purpose, setPurpose] = useState("exchange");
           </select>
         </div>
 
-        <div className="md:col-span-1 min-w-0 space-y-1">
+        <div className="md:col-span-1">
           <label className="text-sm font-medium">Start date</label>
 
 <input
@@ -249,10 +260,10 @@ const [purpose, setPurpose] = useState("exchange");
 
 </div>
 
-        <div className="md:col-span-1 min-w-0 space-y-1">
+        <div className="md:col-span-1">
           <label className="text-sm font-medium">End date</label>
           <input
-            className={CONTROL_CLASS}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
             type="date"
             value={endDate}
             onChange={(e) => {
@@ -263,16 +274,10 @@ const [purpose, setPurpose] = useState("exchange");
           />
         </div>
 
-        
-      {stayDays !== null && stayDays > 90 ? (
-        <p className="text-xs text-amber-700">
-          ⚠️ This dashboard shows <b>short-stay</b> rules. Your selected dates are {stayDays} days.
-        </p>
-      ) : null}
-<div className="md:col-span-1 min-w-0 space-y-1">
+        <div className="md:col-span-1">
           <label className="text-sm font-medium">Passport to use</label>
           <select
-            className={CONTROL_CLASS}
+            className="mt-1 w-full rounded-xl border px-3 py-2"
             value={passportChoice}
             onChange={(e) => onPassportChoice(e.target.value)}
           >
@@ -283,7 +288,7 @@ const [purpose, setPurpose] = useState("exchange");
           </select>
         </div>
 
-        <div className="min-w-0 space-y-1 sm:col-span-2">
+        <div className="md:col-span-4">
           <button
             type="submit"
             disabled={saving}
