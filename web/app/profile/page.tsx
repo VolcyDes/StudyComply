@@ -36,13 +36,14 @@ export default function ProfilePage() {
   const [selectedCode, setSelectedCode] = useState<string>("FR");
   const [adding, setAdding] = useState(false);
 
+  
   const [notice, setNotice] = useState<{ type: "ok" | "warn" | "err"; text: string } | null>(null);
 
   async function authFetch(path: string, init?: RequestInit) {
     const t = localStorage.getItem("token");
     if (!t) {
       router.push("/login");
-      throw new Error("No token");
+      return new Response(null, { status: 401 });
     }
 
     const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -211,6 +212,19 @@ if (!res.ok) {
 
       <div className="rounded-2xl border bg-white p-5">
         <h2 className="text-lg font-semibold">Add a passport</h2>
+
+        {notice ? (
+          <div
+            className={[
+              "mt-4 rounded-xl border px-3 py-2 text-sm",
+              notice.type === "ok" ? "border-green-200 bg-green-50 text-green-800" : "",
+              notice.type === "warn" ? "border-amber-200 bg-amber-50 text-amber-900" : "",
+              notice.type === "err" ? "border-red-200 bg-red-50 text-red-800" : "",
+            ].join(" ")}
+          >
+            {notice.text}
+          </div>
+        ) : null}
 
         {countriesLoading ? (
           <p className="mt-3 text-sm text-gray-600">Loading countries...</p>
