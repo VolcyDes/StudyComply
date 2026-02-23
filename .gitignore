@@ -28,3 +28,14 @@ api/dist/
 web/.next/
 web/out/
 web/.cache-tmp/
+
+# --- StudyComply junk / backups ---
+.backups/
+_bak/
+PY/
+fetch/
+dist 2/
+*.bak
+*.bak.*
+*.before_rewrite.*
+*.map.bak
