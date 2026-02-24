@@ -1,0 +1,8 @@
+export default function UniversityDashboardPage() {
+  return (
+    <main className="mx-auto max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-semibold">University dashboard</h1>
+      <p className="mt-2 text-sm text-slate-600">This is the university space.</p>
+    </main>
+  );
+}

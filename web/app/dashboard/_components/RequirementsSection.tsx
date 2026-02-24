@@ -14,8 +14,7 @@ type ApiRequirements = {
   messages?: string[] | null;
 };
 
-type Props = {
-  authFetch: (path: string, init?: RequestInit) => Promise<Response>;
+type Props = {authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   onQuickCreateDocument: (args: { title: string; type: string; expiresAt: string }) => Promise<any>;
   refreshKey: number;
 };
@@ -57,7 +56,7 @@ export default function RequirementsSection({ authFetch, onQuickCreateDocument, 
 
     run();
     return () => {
-      cancelled = true
+      cancelled = true;
     };
   }, [authFetch, refreshKey]);
 
@@ -85,7 +84,6 @@ export default function RequirementsSection({ authFetch, onQuickCreateDocument, 
         <p className="mt-4 text-sm text-red-700">{error}</p>
       ) : (
         <div className="mt-4 space-y-4">
-          {/* messages */}
           {messagesList.length > 0 && (
             <div className="rounded-2xl border bg-white p-4">
               <p className="text-sm font-medium">Notes</p>
@@ -97,7 +95,6 @@ export default function RequirementsSection({ authFetch, onQuickCreateDocument, 
             </div>
           )}
 
-          {/* missing */}
           <div className="rounded-2xl border bg-white p-4">
             <p className="text-sm font-medium">Missing documents</p>
             {missingList.length === 0 ? (
@@ -107,7 +104,6 @@ export default function RequirementsSection({ authFetch, onQuickCreateDocument, 
             )}
           </div>
 
-          {/* required */}
           <div className="rounded-2xl border bg-white p-4">
             <p className="text-sm font-medium">What you may need</p>
 
