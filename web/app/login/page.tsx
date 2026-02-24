@@ -9,13 +9,13 @@ type Role = "STUDENT" | "UNIVERSITY";
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("test@test.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("STUDENT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -24,78 +24,92 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || `Login failed (${res.status})`);
+        const txt = await res.text();
+        throw new Error(txt || `Login failed (${res.status})`);
       }
 
-      const rawOk = await res.text();
-      let data: any = null;
-      try { data = rawOk ? JSON.parse(rawOk) : null; } catch { data = null; }
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      const data = await res.json();
+      if (data?.token) localStorage.setItem("token", data.token);
+      if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to fetch");
+      // Redirect selon le rôle choisi (UX). Le /dashboard re-checkera aussi via /me si besoin.
+      router.push(role === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to fetch");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-md">
+    <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-3xl font-bold">Login</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        Sign in to access your dashboard.
-      </p>
+      <p className="mt-2 text-sm text-slate-600">Sign in to access your dashboard.</p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-        <div>
+      <form onSubmit={onSubmit} className="mt-8 space-y-5">
+        <div className="space-y-2">
           <label className="text-sm font-medium">Email</label>
           <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            type="email"
+            className="w-full rounded-xl border px-3 py-2"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            type="email"
             required
           />
         </div>
 
-        <div>
+        <div className="space-y-2">
           <label className="text-sm font-medium">Password</label>
           <input
-            className="mt-1 w-full rounded-xl border px-3 py-2"
-            type="password"
+            className="w-full rounded-xl border px-3 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
+            type="password"
             required
           />
         </div>
 
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Account type</label>
+          <select
+            className="w-full rounded-xl border px-3 py-2"
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+          >
+            <option value="STUDENT">Student</option>
+            <option value="UNIVERSITY">University</option>
+          </select>
+        </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
-        )}
+        ) : null}
 
         <button
-          type="submit"
+          className="w-full rounded-2xl bg-black px-5 py-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           disabled={loading}
-          className="w-full rounded-xl bg-black px-4 py-2 text-white hover:opacity-90 disabled:opacity-60"
+          type="submit"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
-      </form>
 
-      <p className="mt-4 text-xs text-gray-500">
-        API: <span className="font-mono">{API_BASE_URL}</span>
-      </p>
-    </div>
+        <p className="text-sm text-slate-600">
+          No account?{" "}
+          <a className="underline" href="/register">Create account</a>
+        </p>
+
+        <p className="text-xs text-slate-500">
+          API: <span className="font-mono">{API_BASE_URL}</span>
+        </p>
+      </form>
+    </main>
   );
 }
