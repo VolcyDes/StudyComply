@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getCountryOptions } from "@/lib/countries";
 
 type ActiveProject = {
   id: string;
@@ -26,6 +27,8 @@ export default function ProjectSection({
   const [active, setActive] = useState<ActiveProject | null>(null);
 
   const [destinationCountry, setDestinationCountry] = useState("DE");
+
+  const countryOptions = useMemo(() => getCountryOptions(), []);
   const [purpose, setPurpose] = useState("study");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
