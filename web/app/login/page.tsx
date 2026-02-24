@@ -4,11 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
 
+type Role = "STUDENT" | "UNIVERSITY";
+
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("test@test.com");
   const [password, setPassword] = useState("password123");
+  const [role, setRole] = useState<Role>("STUDENT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +24,7 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role }),
       });
 
       if (!res.ok) {
