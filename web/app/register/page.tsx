@@ -8,6 +8,7 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"STUDENT"|"UNIVERSITY">("STUDENT");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +22,7 @@ export default function RegisterPage() {
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, role}),
       });
 
       if (!res.ok) {
