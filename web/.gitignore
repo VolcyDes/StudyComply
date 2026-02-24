@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # local backups
 *.bak_*
+
+# local backups
+*.bak_*
