@@ -1,60 +1,79 @@
-"use client";
+import { API_BASE_URL } from "./config";
 
-/**
- * Client helper to determine which dashboard to show.
- * It calls GET /me with the bearer token (stored in localStorage).
- *
- * It supports both cases:
- * - NEXT_PUBLIC_API_BASE_URL = https://studycomply-api.fly.dev   (no /api/v1)
- * - NEXT_PUBLIC_API_BASE_URL = http://localhost:3000/api/v1     (already includes /api/v1)
- */
-function baseUrl(): string {
-  const raw = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim().replace(/\/+$/, "");
-  if (!raw) return ""; // will crash later with a clearer error
-  return raw;
+export type AccountKind = "student" | "university";
+
+function normalizeRole(v: any): string {
+  if (v == null) return "";
+  return String(v).trim().toUpperCase();
 }
 
-function meUrl(): string {
-  const base = baseUrl();
-  // If base already ends with /api/v1 (or contains /api/), we call /me directly
-  if (base.includes("/api/")) return `${base}/me`;
-  return `${base}/api/v1/me`;
-}
+function detectKindFromAny(data: any): AccountKind | null {
+  // candidates: handle many possible shapes
+  const candidates = [
+    data?.user?.role,
+    data?.user?.kind,
+    data?.user?.accountKind,
+    data?.user?.accountType,
+    data?.user?.type,
+    data?.role,
+    data?.kind,
+    data?.accountKind,
+    data?.accountType,
+    data?.type,
+  ].map(normalizeRole).filter(Boolean);
 
-function readToken(): string {
-  // adapt if you store under another key
-  return (
-    localStorage.getItem("accessToken") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("jwt") ||
-    ""
-  );
-}
+  for (const raw of candidates) {
+    // Typical cases
+    if (raw === "UNIVERSITY") return "university";
+    if (raw === "STUDENT") return "student";
 
-export type AccountKind = "student" | "university" | "admin";
+    // Variants
+    if (raw.includes("UNIVERSITY")) return "university";
+    if (raw.includes("SCHOOL")) return "university";
+    if (raw.includes("ADMIN_UNIVERSITY")) return "university";
+    if (raw.includes("UNI")) return "university";
 
-export async function getAccountKindClient(): Promise<AccountKind | null> {
-  const url = meUrl();
-  if (!url) throw new Error("NEXT_PUBLIC_API_BASE_URL is missing");
+    if (raw.includes("STUDENT")) return "student";
+  }
 
-  const token = readToken();
-  const res = await fetch(url, {
-    method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    cache: "no-store",
-  });
-
-  if (!res.ok) return null;
-
-  const json: any = await res.json().catch(() => ({}));
-
-  // try common shapes
-  const role =
-    (json?.role || json?.accountKind || json?.kind || json?.user?.role || json?.user?.accountKind || "")
-      .toString()
-      .toLowerCase()
-      .trim();
-
-  if (role === "student" || role === "university" || role === "admin") return role as AccountKind;
   return null;
+}
+
+export async function getAccountKindClient(): Promise<AccountKind> {
+  // 1) Token required
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("No token");
+
+  // 2) Try /me first
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const k = detectKindFromAny(data);
+      if (k) return k;
+    }
+  } catch {
+    // ignore, fallback below
+  }
+
+  // 3) Fallback: localStorage user (if your login/register stores user)
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (rawUser) {
+      const user = JSON.parse(rawUser);
+      const k = detectKindFromAny({ user });
+      if (k) return k;
+    }
+  } catch {
+    // ignore
+  }
+
+  // 4) If we STILL can't detect, don't silently lie.
+  // But to keep UX, default student (you can change to throw if you prefer).
+  return "student";
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getAccountKindClient } from "@/lib/meClient";
 import { API_BASE_URL } from "../../lib/config";
 
 type Passport = {
@@ -21,6 +22,18 @@ function clsx(...xs: Array<string | false | null | undefined>) {
 
 export default function ProfilePage() {
   const router = useRouter();
+
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const kind = await getAccountKindClient();
+        if (kind === "university") router.replace("/university/dashboard");
+      } catch {
+        router.replace("/login");
+      }
+    })();
+  }, [router]);
 
   const [loading, setLoading] = useState(true);
 

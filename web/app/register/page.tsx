@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
+import { getAccountKindClient } from "../../lib/meClient";
 
 type Role = "STUDENT" | "UNIVERSITY";
 
@@ -36,7 +37,8 @@ export default function RegisterPage() {
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-      router.push(role === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+      const kind = await getAccountKindClient();
+      router.replace(kind === "university" ? "/university/dashboard" : "/student/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Failed to fetch");
     } finally {

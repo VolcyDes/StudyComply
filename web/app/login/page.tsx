@@ -3,15 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
-
-type Role = "STUDENT" | "UNIVERSITY";
+import { getAccountKindClient } from "../../lib/meClient";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("STUDENT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,8 +34,8 @@ export default function LoginPage() {
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-      // Redirect selon le rôle choisi (UX). Le /dashboard re-checkera aussi via /me si besoin.
-      router.push(role === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+      const kind = await getAccountKindClient();
+      router.replace(kind === "university" ? "/university/dashboard" : "/student/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Failed to fetch");
     } finally {
@@ -73,18 +71,6 @@ export default function LoginPage() {
             type="password"
             required
           />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Account type</label>
-          <select
-            className="w-full rounded-xl border px-3 py-2"
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-          >
-            <option value="STUDENT">Student</option>
-            <option value="UNIVERSITY">University</option>
-          </select>
         </div>
 
         {error ? (
