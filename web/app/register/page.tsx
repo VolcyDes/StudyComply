@@ -36,7 +36,7 @@ export default function RegisterPage() {
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
 
-      router.push("/dashboard");
+      router.push(role === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Failed to fetch");
     } finally {
