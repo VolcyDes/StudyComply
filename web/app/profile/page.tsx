@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
 
 type Passport = { id: string; countryCode: string; createdAt: string };
-type Country = { code: string; name: string };
+type Country  = { code: string; name: string };
+type User     = { id: string; email: string; role: string };
 
 async function safeJson(res: Response) {
   const text = await res.text();
@@ -13,16 +14,26 @@ async function safeJson(res: Response) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
+const ROLE_OPTIONS = [
+  { value: "USER",       label: "Étudiant",    icon: "🎓", desc: "Je prépare une mobilité" },
+  { value: "UNIVERSITY", label: "Université",  icon: "🏛️", desc: "Je gère des étudiants" },
+];
+
 export default function ProfilePage() {
   const router = useRouter();
 
+  const [user,     setUser]     = useState<User | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
   const [passports, setPassports] = useState<Passport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [loading,  setLoading]  = useState(true);
+  const [query,    setQuery]    = useState("");
   const [selectedCode, setSelectedCode] = useState("FR");
-  const [adding, setAdding] = useState(false);
-  const [notice, setNotice] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [adding,   setAdding]   = useState(false);
+  const [notice,   setNotice]   = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // Role update
+  const [savingRole,  setSavingRole]  = useState(false);
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
 
   function authFetch(path: string, init?: RequestInit) {
     const token = localStorage.getItem("token");
@@ -33,13 +44,43 @@ export default function ProfilePage() {
     });
   }
 
+  async function updateRole(newRole: string) {
+    if (newRole === user?.role) return;
+    setSavingRole(true);
+    setPendingRole(newRole);
+    try {
+      const res = await authFetch("/api/v1/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const data = await safeJson(res);
+      if (data?.user) {
+        setUser(data.user);
+        // Update localStorage so TopNav + redirects reflect new role
+        const stored = JSON.parse(localStorage.getItem("user") ?? "{}");
+        localStorage.setItem("user", JSON.stringify({ ...stored, role: data.user.role }));
+        setNotice({ type: "ok", text: `Compte mis à jour en ${newRole === "UNIVERSITY" ? "Université" : "Étudiant"} ✓ — reconnecte-toi pour appliquer.` });
+      }
+    } catch {
+      setNotice({ type: "err", text: "Échec de la mise à jour." });
+    } finally {
+      setSavingRole(false);
+      setPendingRole(null);
+    }
+  }
+
   useEffect(() => {
     async function boot() {
       try {
-        const [cRes, pRes] = await Promise.all([
+        const [meRes, cRes, pRes] = await Promise.all([
+          authFetch("/api/v1/me"),
           authFetch("/api/v1/meta/countries"),
           authFetch("/api/v1/passports"),
         ]);
+
+        const meData = await safeJson(meRes);
+        if (meData?.user) setUser(meData.user);
 
         const cData = await safeJson(cRes);
         const items: Country[] = Array.isArray(cData) ? cData : cData?.items ?? [];
@@ -118,6 +159,79 @@ export default function ProfilePage() {
           </p>
         </div>
       </div>
+
+      {/* ── Type de compte ── */}
+      <section className="rounded-3xl border bg-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Type de compte</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Sélectionne ton rôle — cela détermine ton dashboard et tes fonctionnalités.
+            </p>
+          </div>
+          {user && (
+            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+              user.role === "UNIVERSITY" ? "bg-violet-100 text-violet-700" : "bg-indigo-100 text-indigo-700"
+            }`}>
+              {user.role === "UNIVERSITY" ? "🏛️ Université" : "🎓 Étudiant"}
+            </span>
+          )}
+        </div>
+
+        {notice && (
+          <div className={`mt-4 flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+            notice.type === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}>
+            <span>{notice.type === "ok" ? "✓" : "⚠"}</span>
+            {notice.text}
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {ROLE_OPTIONS.map((r) => {
+            const isActive  = user?.role === r.value;
+            const isLoading = savingRole && pendingRole === r.value;
+            return (
+              <button key={r.value} type="button"
+                onClick={() => updateRole(r.value)}
+                disabled={savingRole || isActive}
+                className={`relative rounded-2xl border-2 p-4 text-left transition ${
+                  isActive
+                    ? "border-indigo-500 bg-indigo-50"
+                    : "border-gray-200 hover:border-indigo-300 hover:bg-gray-50"
+                } disabled:cursor-default`}>
+                <span className="text-xl">{r.icon}</span>
+                <p className={`mt-2 font-semibold text-sm ${isActive ? "text-indigo-700" : "text-gray-800"}`}>
+                  {r.label}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">{r.desc}</p>
+                {isActive && (
+                  <span className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-white text-xs">✓</span>
+                )}
+                {isLoading && (
+                  <span className="absolute right-3 top-3 h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {notice?.type === "ok" && (
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+                window.location.href = "/login";
+              }}
+              className="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition">
+              Se reconnecter maintenant →
+            </button>
+          </div>
+        )}
+      </section>
 
       {/* ── Passeports existants ── */}
       <section>
