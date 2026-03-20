@@ -71,6 +71,14 @@ function isExpired(iso: string) {
   return new Date(iso).getTime() < Date.now();
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function safeJson(res: Response) {
+  const text = await res.text();
+  if (!text || !text.trim()) return null;
+  try { return JSON.parse(text); } catch { return null; }
+}
+
 // ─── Auth fetch ───────────────────────────────────────────────────────────────
 
 function useAuthFetch() {
@@ -190,21 +198,21 @@ export default function StudentDashboardPage() {
           authFetch("/api/v1/passports"),
         ]);
 
-        const meData = await meRes.json();
-        setUser(meData.user ?? null);
+        const meData = await safeJson(meRes);
+        setUser(meData?.user ?? null);
 
         if (projectRes.ok) {
-          const p = await projectRes.json();
+          const p = await safeJson(projectRes);
           setProject(p ?? null);
         }
 
         if (docsRes.ok) {
-          const d = await docsRes.json();
+          const d = await safeJson(docsRes);
           setDocuments(Array.isArray(d) ? d : []);
         }
 
         if (passportsRes.ok) {
-          const p = await passportsRes.json();
+          const p = await safeJson(passportsRes);
           setPassports(Array.isArray(p) ? p : []);
         }
       } catch (e: any) {
@@ -226,8 +234,8 @@ export default function StudentDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newDoc),
       });
-      const created = await res.json();
-      setDocuments((prev) => [created, ...prev]);
+      const created = await safeJson(res);
+      if (created) setDocuments((prev) => [created, ...prev]);
       setShowAddDoc(false);
       setNewDoc({ title: "", type: "visa", expiresAt: "" });
     } catch {
