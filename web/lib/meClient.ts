@@ -34,6 +34,7 @@ function detectKindFromAny(data: any): AccountKind | null {
     if (raw.includes("UNI")) return "university";
 
     if (raw.includes("STUDENT")) return "student";
+    if (raw === "USER") return "student"; // DB stores students as USER
   }
 
   return null;

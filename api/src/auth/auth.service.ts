@@ -2,6 +2,17 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
+
+// The frontend may send "STUDENT" but the DB enum uses "USER" for students.
+// Normalize at the boundary so we never write an invalid role.
+function normalizeRole(raw?: string): Role {
+  if (!raw) return Role.USER;
+  const upper = raw.toUpperCase();
+  if (upper === 'UNIVERSITY') return Role.UNIVERSITY;
+  if (upper === 'ADMIN') return Role.ADMIN;
+  return Role.USER; // STUDENT / USER / anything else → USER
+}
 
 @Injectable()
 export class AuthService {
@@ -10,15 +21,20 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
-  async register(email: string, password: string) {
+  async register(email: string, password: string, rawRole?: string) {
+    const role = normalizeRole(rawRole);
     const hashed = await bcrypt.hash(password, 10);
 
     const user = await this.prisma.user.create({
-      data: { email, password: hashed },
-      select: { id: true, email: true, createdAt: true },
+      data: { email, password: hashed, role },
+      select: { id: true, email: true, role: true, createdAt: true },
     });
 
-    const token = await this.jwt.signAsync({ sub: user.id, email: user.email });
+    const token = await this.jwt.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
     return { user, token };
   }
@@ -31,8 +47,12 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) throw new UnauthorizedException('Invalid credentials');
 
-    const token = await this.jwt.signAsync({ sub: user.id, email: user.email });
+    const token = await this.jwt.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
-    return { user: { id: user.id, email: user.email }, token };
+    return { user: { id: user.id, email: user.email, role: user.role }, token };
   }
 }
