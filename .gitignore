@@ -39,3 +39,7 @@ dist 2/
 *.bak.*
 *.before_rewrite.*
 *.map.bak
+
+# local backups
+*.bak_*
+*.broken_*

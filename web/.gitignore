@@ -25,3 +25,12 @@ pnpm-debug.log*
 # env
 .env
 .env.*
+
+# local backups
+*.bak_*
+
+# local backups
+*.bak_*
+
+# local backups
+*.bak_*
