@@ -40,12 +40,26 @@ function detectKindFromAny(data: any): AccountKind | null {
   return null;
 }
 
+/** Decode the JWT payload (client-side, no verification — for UI routing only) */
+function getRoleFromToken(token: string): AccountKind | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return detectKindFromAny(payload);
+  } catch {
+    return null;
+  }
+}
+
 export async function getAccountKindClient(): Promise<AccountKind> {
   // 1) Token required
   const token = localStorage.getItem("token");
   if (!token) throw new Error("No token");
 
-  // 2) Try /me first
+  // 2) Decode JWT payload directly — most reliable, no network needed
+  const kindFromToken = getRoleFromToken(token);
+  if (kindFromToken) return kindFromToken;
+
+  // 3) Try /me (works once backend returns role in response)
   try {
     const res = await fetch(`${API_BASE_URL}/api/v1/me`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -62,7 +76,7 @@ export async function getAccountKindClient(): Promise<AccountKind> {
     // ignore, fallback below
   }
 
-  // 3) Fallback: localStorage user (if your login/register stores user)
+  // 4) Fallback: localStorage user
   try {
     const rawUser = localStorage.getItem("user");
     if (rawUser) {
@@ -74,7 +88,6 @@ export async function getAccountKindClient(): Promise<AccountKind> {
     // ignore
   }
 
-  // 4) If we STILL can't detect, don't silently lie.
-  // But to keep UX, default student (you can change to throw if you prefer).
+  // 5) Last resort default
   return "student";
 }
