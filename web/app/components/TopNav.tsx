@@ -3,92 +3,176 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { clearAuth, getRole, hasToken } from "../../lib/auth";
 
-function NavLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
+export default function TopNav() {
+  const router   = useRouter();
   const pathname = usePathname();
-  const active = pathname === href;
+  const [authed, setAuthed]   = useState(false);
+  const [email, setEmail]     = useState<string | null>(null);
+  const [role,  setRoleState] = useState<"UNIVERSITY" | "STUDENT" | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const base =
-    "rounded-xl px-3 py-2 text-sm transition hover:bg-gray-50";
-  const cls = active
-    ? `${base} bg-gray-100 font-medium`
-    : `${base} text-gray-700`;
+  useEffect(() => {
+    if (!hasToken()) { setAuthed(false); setEmail(null); setRoleState(null); return; }
+    setAuthed(true);
+    setRoleState(getRole());
+    try {
+      const u = localStorage.getItem("user");
+      if (u) setEmail(JSON.parse(u)?.email ?? null);
+    } catch { /* ignore */ }
+  }, [pathname]);
+
+  function logout() {
+    clearAuth();
+    setAuthed(false);
+    setEmail(null);
+    setRoleState(null);
+    router.push("/login");
+  }
+
+  const dashboardHref = role === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard";
+  const isUniversity  = role === "UNIVERSITY";
 
   return (
-    <Link href={href} className={cls}>
+    <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className={`flex h-8 w-8 items-center justify-center rounded-xl text-white text-sm font-bold shadow-sm transition group-hover:scale-105 ${
+            isUniversity ? "bg-gradient-to-br from-violet-600 to-purple-700" : "bg-gradient-to-br from-indigo-600 to-blue-600"
+          }`}>
+            {isUniversity ? "🏛" : "🎓"}
+          </div>
+          <div className="leading-tight">
+            <div className="text-sm font-bold text-gray-900">StudyComply</div>
+            {authed && role && (
+              <div className={`text-[10px] font-medium ${isUniversity ? "text-violet-500" : "text-indigo-500"}`}>
+                {isUniversity ? "Espace Université" : "Espace Étudiant"}
+              </div>
+            )}
+          </div>
+        </Link>
+
+        {/* Nav links — desktop */}
+        {authed && (
+          <nav className="hidden md:flex items-center gap-1">
+            <NavLink href={dashboardHref} active={pathname.startsWith(isUniversity ? "/university" : "/student")}>
+              Dashboard
+            </NavLink>
+            <NavLink href="/profile" active={pathname === "/profile"}>
+              Profil
+            </NavLink>
+          </nav>
+        )}
+
+        {/* Right zone */}
+        <div className="flex items-center gap-2">
+          {!authed ? (
+            <>
+              <Link href="/login"
+                className="rounded-xl px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
+                Se connecter
+              </Link>
+              <Link href="/register"
+                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 transition">
+                Créer un compte
+              </Link>
+            </>
+          ) : (
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 transition"
+              >
+                {/* Avatar */}
+                <div className={`flex h-6 w-6 items-center justify-center rounded-full text-white text-xs font-bold ${
+                  isUniversity ? "bg-violet-600" : "bg-indigo-600"
+                }`}>
+                  {email ? email[0].toUpperCase() : "?"}
+                </div>
+                {email && (
+                  <span className="hidden sm:block max-w-[140px] truncate text-gray-700">
+                    {email.split("@")[0]}
+                  </span>
+                )}
+                <svg className="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Dropdown */}
+              {menuOpen && (
+                <>
+                  {/* Backdrop */}
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+                    {/* User info */}
+                    <div className="border-b border-gray-100 px-4 py-3">
+                      <p className="text-xs text-gray-400">Connecté en tant que</p>
+                      <p className="mt-0.5 truncate text-sm font-medium text-gray-900">{email}</p>
+                      <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        isUniversity ? "bg-violet-100 text-violet-700" : "bg-indigo-100 text-indigo-700"
+                      }`}>
+                        {isUniversity ? "🏛 Université" : "🎓 Étudiant"}
+                      </span>
+                    </div>
+
+                    {/* Links */}
+                    <div className="py-1">
+                      <DropdownLink href={dashboardHref} onClick={() => setMenuOpen(false)}>
+                        Dashboard
+                      </DropdownLink>
+                      <DropdownLink href="/profile" onClick={() => setMenuOpen(false)}>
+                        Mon profil
+                      </DropdownLink>
+                    </div>
+
+                    {/* Logout */}
+                    <div className="border-t border-gray-100 p-2">
+                      <button
+                        onClick={logout}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Se déconnecter
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className={`rounded-xl px-3 py-2 text-sm transition ${
+        active ? "bg-gray-100 font-medium text-gray-900" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+      }`}
+    >
       {children}
     </Link>
   );
 }
 
-export default function TopNav() {
-  const router = useRouter();
-  const [hasToken, setHasToken] = useState(false);
-
-  useEffect(() => {
-    setHasToken(Boolean(localStorage.getItem("token")));
-  }, []);
-
+function DropdownLink({ href, onClick, children }: { href: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <header className="border-b bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-xl bg-gray-900" />
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">StudyComply</div>
-            <div className="text-xs text-gray-500">
-              Stay compliant abroad
-            </div>
-          </div>
-        </Link>
-
-        <nav className="flex items-center gap-1">
-          <NavLink href="/">Home</NavLink>
-
-          {hasToken && (
-            <>
-              <NavLink href="/dashboard">Dashboard</NavLink>
-              <NavLink href="/profile">Profile</NavLink>
-            </>
-          )}
-
-          <div className="ml-2 flex items-center gap-2">
-            {!hasToken ? (
-              <>
-                <Link
-                  href="/login"
-                  className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="rounded-xl bg-black px-3 py-2 text-sm text-white hover:opacity-90"
-                >
-                  Create account
-                </Link>
-              </>
-            ) : (
-              <button
-                onClick={() => {
-                  localStorage.removeItem("token");
-                  localStorage.removeItem("user");
-                  router.push("/login");
-                }}
-                className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-              >
-                Logout
-              </button>
-            )}
-          </div>
-        </nav>
-      </div>
-    </header>
+    <Link
+      href={href}
+      onClick={onClick}
+      className="flex items-center gap-2 rounded-xl mx-1 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+    >
+      {children}
+    </Link>
   );
 }

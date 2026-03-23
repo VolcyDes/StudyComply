@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../../lib/config";
+import { clearAuth } from "../../../lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -147,8 +148,7 @@ export default function StudentDashboardPage() {
       headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token}` },
     }).then((res) => {
       if (res.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        clearAuth();
         router.replace("/login");
         throw new Error("Unauthorized");
       }
@@ -342,12 +342,23 @@ export default function StudentDashboardPage() {
                 : "Configure ton projet de mobilité pour commencer."}
             </p>
           </div>
-          <button
-            onClick={openProjectModal}
-            className="shrink-0 rounded-xl bg-white/20 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/30 transition"
-          >
-            {project ? "✏️ Modifier le projet" : "➕ Créer un projet"}
-          </button>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <button
+              onClick={openProjectModal}
+              className="rounded-xl bg-white/20 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/30 transition"
+            >
+              {project ? "✏️ Modifier le projet" : "➕ Créer un projet"}
+            </button>
+            <button
+              onClick={() => { clearAuth(); router.push("/login"); }}
+              className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/20 transition"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Déconnexion
+            </button>
+          </div>
         </div>
       </div>
 
