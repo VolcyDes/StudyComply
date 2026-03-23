@@ -289,6 +289,22 @@ export default function StudentDashboardPage() {
     .filter((c) => !countryQuery || `${c.name} ${c.code}`.toLowerCase().includes(countryQuery.toLowerCase()))
     .slice(0, 80);
 
+  // ── Smart checklist — MUST be before any early return (Rules of Hooks) ──
+  const doneDocTypes = useMemo(
+    () => new Set(documents.filter((d) => d.fileName).map((d) => d.type)),
+    [documents],
+  );
+  const checklist = useMemo(
+    () => project && passports.length > 0
+      ? buildChecklist(
+          { passportCodes: passports.map((p) => p.countryCode), destinationCountry: project.destinationCountry, startDate: project.startDate, endDate: project.endDate },
+          doneDocTypes,
+        )
+      : [],
+    [project, passports, doneDocTypes],
+  );
+  const summary = useMemo(() => summarise(checklist), [checklist]);
+
   // ─── Loading / Error ──────────────────────────────────────────────────────
 
   if (loading) return (
@@ -314,22 +330,6 @@ export default function StudentDashboardPage() {
 
   const nextStep     = computeNextStep(project, passports, documents);
   const docsWithFile = documents.filter((d) => d.fileName);
-
-  // Smart checklist — personalised by passport tier × destination
-  const doneDocTypes = useMemo(
-    () => new Set(documents.filter((d) => d.fileName).map((d) => d.type)),
-    [documents],
-  );
-  const checklist = useMemo(
-    () => project && passports.length > 0
-      ? buildChecklist(
-          { passportCodes: passports.map((p) => p.countryCode), destinationCountry: project.destinationCountry, startDate: project.startDate, endDate: project.endDate },
-          doneDocTypes,
-        )
-      : [],
-    [project, passports, doneDocTypes],
-  );
-  const summary = useMemo(() => summarise(checklist), [checklist]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
