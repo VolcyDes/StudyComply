@@ -7,6 +7,8 @@ import { API_BASE_URL } from "../../../lib/config";
 import { clearAuth } from "../../../lib/auth";
 import { buildChecklist, summarise } from "../../../lib/rules/engine";
 import type { ChecklistItem } from "../../../lib/rules/engine";
+import { SUPPORTED_DESTINATION_CODES, DESTINATION_GROUPS } from "../../../lib/rules/supported-destinations";
+import { ALL_COUNTRIES } from "../../../lib/countries";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,7 +116,13 @@ export default function StudentDashboardPage() {
   const [project,   setProject]   = useState<Project | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [passports, setPassports] = useState<Passport[]>([]);
-  const [countries, setCountries] = useState<Country[]>([]);
+  // Supported destination countries (static list filtered to supported zones)
+  const supportedCountries = ALL_COUNTRIES.filter((c) => SUPPORTED_DESTINATION_CODES.has(c.code));
+
+  // Helper: get country name by ISO code
+  function countryName(code: string): string {
+    return ALL_COUNTRIES.find((c) => c.code === code)?.name ?? code;
+  }
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
 
@@ -157,12 +165,11 @@ export default function StudentDashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [meRes, projectRes, docsRes, passportsRes, countriesRes] = await Promise.all([
+        const [meRes, projectRes, docsRes, passportsRes] = await Promise.all([
           authFetch("/api/v1/me"),
           authFetch("/api/v1/projects/active"),
           authFetch("/api/v1/documents"),
           authFetch("/api/v1/passports"),
-          authFetch("/api/v1/meta/countries"),
         ]);
 
         const meData = await safeJson(meRes);
@@ -171,7 +178,6 @@ export default function StudentDashboardPage() {
         if (projectRes.ok) { const p = await safeJson(projectRes); setProject(p ?? null); }
         if (docsRes.ok)     { const d = await safeJson(docsRes);     setDocuments(Array.isArray(d) ? d : []); }
         if (passportsRes.ok){ const p = await safeJson(passportsRes); setPassports(Array.isArray(p) ? p : []); }
-        if (countriesRes.ok){ const c = await safeJson(countriesRes); setCountries(Array.isArray(c) ? c : c?.items ?? []); }
       } catch (e: any) {
         if (e?.message !== "Unauthorized") setError(e?.message ?? "Erreur de chargement");
       } finally { setLoading(false); }
@@ -189,7 +195,7 @@ export default function StudentDashboardPage() {
         startDate: fmtDateInput(project.startDate),
         endDate: fmtDateInput(project.endDate),
       });
-      setCountryQuery(countries.find((c) => c.code === project.destinationCountry)?.name ?? project.destinationCountry);
+      setCountryQuery(supportedCountries.find((c) => c.code === project.destinationCountry)?.name ?? project.destinationCountry);
     } else {
       setProjForm({ destinationCountry: "", purpose: "exchange", startDate: "", endDate: "" });
       setCountryQuery("");
@@ -284,10 +290,10 @@ export default function StudentDashboardPage() {
     } catch { /* ignore */ }
   }
 
-  // ── Filtered countries ──
-  const filteredCountries = countries
+  // ── Filtered countries (only supported destinations) ──
+  const filteredCountries = supportedCountries
     .filter((c) => !countryQuery || `${c.name} ${c.code}`.toLowerCase().includes(countryQuery.toLowerCase()))
-    .slice(0, 80);
+    .slice(0, 50);
 
   // ── Smart checklist — MUST be before any early return (Rules of Hooks) ──
   const doneDocTypes = useMemo(
@@ -350,7 +356,7 @@ export default function StudentDashboardPage() {
             </h1>
             <p className="mt-1 text-indigo-200 text-sm">
               {project
-                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${project.destinationCountry} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}`
+                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}`
                 : "Configure ton projet de mobilité pour commencer."}
             </p>
           </div>
@@ -377,7 +383,7 @@ export default function StudentDashboardPage() {
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard icon="🗺️" label="Destination"
-          value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${project.destinationCountry}` : "—"}
+          value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)}` : "—"}
           sub={project ? `${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}` : "Aucun projet"}
           color="bg-indigo-50 border-indigo-100" iconBg="bg-indigo-100" />
         <StatCard icon="📄" label="Conformité"
@@ -527,26 +533,48 @@ export default function StudentDashboardPage() {
           <div className="mt-5 space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700">Pays de destination</label>
+              <p className="mt-0.5 text-xs text-gray-400">🌍 Europe (Schengen & UE), États-Unis, Canada</p>
               <input
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="Recherche un pays (France, Germany…)"
+                placeholder="Recherche (ex : France, Allemagne, États-Unis…)"
                 value={countryQuery}
                 onChange={(e) => {
                   setCountryQuery(e.target.value);
                   setProjForm((f) => ({ ...f, destinationCountry: "" }));
                 }}
               />
-              {countryQuery && !projForm.destinationCountry && filteredCountries.length > 0 && (
-                <div className="mt-1 max-h-44 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                  {filteredCountries.map((c) => (
-                    <button key={c.code} type="button"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 text-left"
-                      onClick={() => { setProjForm((f) => ({ ...f, destinationCountry: c.code })); setCountryQuery(`${FLAGS[c.code] ?? "🌍"} ${c.name}`); }}>
-                      <span>{FLAGS[c.code] ?? "🌍"}</span>
-                      <span className="font-medium">{c.name}</span>
-                      <span className="ml-auto text-xs text-gray-400">{c.code}</span>
-                    </button>
-                  ))}
+              {!projForm.destinationCountry && filteredCountries.length > 0 && (
+                <div className="mt-1 max-h-52 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {countryQuery ? (
+                    filteredCountries.map((c) => (
+                      <button key={c.code} type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 text-left"
+                        onClick={() => { setProjForm((f) => ({ ...f, destinationCountry: c.code })); setCountryQuery(`${FLAGS[c.code] ?? "🌍"} ${c.name}`); }}>
+                        <span>{FLAGS[c.code] ?? "🌍"}</span>
+                        <span className="font-medium">{c.name}</span>
+                        <span className="ml-auto text-xs text-gray-400">{c.code}</span>
+                      </button>
+                    ))
+                  ) : (
+                    DESTINATION_GROUPS.map((group) => (
+                      <div key={group.label}>
+                        <p className="px-3 pt-2 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wide">{group.label}</p>
+                        {(group.codes as readonly string[]).map((code) => {
+                          const country = supportedCountries.find((c) => c.code === code);
+                          if (!country) return null;
+                          return (
+                            <button key={code} type="button"
+                              className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-indigo-50 text-left"
+                              onClick={() => { setProjForm((f) => ({ ...f, destinationCountry: code })); setCountryQuery(`${FLAGS[code] ?? "🌍"} ${country.name}`); }}>
+                              <span>{FLAGS[code] ?? "🌍"}</span>
+                              <span className="font-medium">{country.name}</span>
+                              <span className="ml-auto text-xs text-gray-400">{code}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
               {projForm.destinationCountry && (

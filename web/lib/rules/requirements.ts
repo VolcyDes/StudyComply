@@ -1,262 +1,538 @@
 /**
  * ─────────────────────────────────────────────────────────────────────────────
- * REQUIREMENT DEFINITIONS  — the data layer, easy to update.
+ * REQUIREMENT DEFINITIONS — the data layer, easy to update.
  *
- * To add / update a rule: edit this file only. The engine (engine.ts) never
- * needs to change. Deploy → done.
+ * To add / update a rule: edit this file only. The engine never needs to change.
  *
  * daysBeforeDeparture:
- *   Negative  = N days BEFORE departure   (e.g. -90 = "start 90 days before leaving")
+ *   Negative  = N days BEFORE departure   (e.g. -90 = "90 days before leaving")
  *   0         = on departure day
- *   Positive  = N days AFTER arrival      (e.g. +8 = "within 8 days of arriving")
+ *   Positive  = N days AFTER arrival      (e.g. +30 = "within 30 days of arriving")
  *
- * tiers: which passport tiers need this requirement.
+ * tiers: EU_EEA (free movement) or NON_EU (visa required)
+ * destinations: which destination zones this applies to
+ *
+ * Sources used to verify information (March 2026):
+ *   Schengen: https://education.ec.europa.eu/node/1775
+ *   USA F-1:  https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+ *   Canada:   https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit.html
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import type { PassportTier } from "./passport-tiers";
+import type { DestinationZone } from "./supported-destinations";
 
 export type DocStatus = "todo" | "in_progress" | "done" | "expired";
 
 export type RequirementDef = {
-  /** Stable identifier — used to match with user's documents. */
   id: string;
-
-  /** Document type — links to the coffrefort document type field. */
   type: string;
-
-  /** Short label shown in the UI. */
   label: string;
-
-  /** One-line explanation of what this document is / why it's needed. */
   description: string;
-
-  /** Emoji icon. */
   icon: string;
-
-  /**
-   * Days relative to departure date.
-   * Negative = before departure, positive = after arrival.
-   */
   daysBeforeDeparture: number;
-
-  /** "required" shows in red if missing. "recommended" shows in amber. */
   priority: "required" | "recommended";
-
-  /** Which passport tiers need this document. */
+  /** Which passport tiers need this. Use both for requirements that apply to all. */
   tiers: PassportTier[];
-
-  /** Optional link to more info or where to apply. */
+  /** Which destination zones this applies to. */
+  destinations: DestinationZone[];
+  /** Official link where the student can apply or get more info. */
   link?: string;
-
-  /** Optional note shown in the UI (e.g. country-specific exception). */
+  linkLabel?: string;
   note?: string;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED — required for all tiers
+// COMMON — all destinations, all tiers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SHARED: RequirementDef[] = [
+const COMMON: RequirementDef[] = [
   {
     id: "university_acceptance",
     type: "acceptance",
     label: "Lettre d'acceptation universitaire",
-    description: "Lettre officielle de l'université d'accueil confirmant ton inscription.",
+    description: "Lettre officielle de l'université d'accueil confirmant ton admission. Document clé pour toutes les demandes de visa ou de permis.",
     icon: "🎓",
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
   },
   {
     id: "transcripts",
     type: "transcript",
     label: "Relevés de notes officiels",
-    description: "Derniers relevés de notes traduits si nécessaire (souvent demandés pour le visa ou l'université).",
+    description: "Derniers relevés de notes, souvent demandés par l'université d'accueil et les consulats. Faire légaliser ou apostiller si nécessaire.",
     icon: "📄",
     daysBeforeDeparture: -90,
     priority: "recommended",
     tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
   },
   {
     id: "accommodation_proof",
     type: "accommodation",
     label: "Justificatif de logement",
-    description: "Contrat de location, attestation de résidence universitaire ou hébergement chez un tiers.",
+    description: "Contrat de location, attestation de résidence universitaire (cité-U, dortoir) ou hébergement chez un tiers avec attestation notariée.",
     icon: "🏠",
     daysBeforeDeparture: -45,
     priority: "required",
     tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
   },
   {
     id: "bank_account_local",
     type: "bank",
     label: "Ouverture d'un compte bancaire local",
-    description: "Indispensable pour recevoir bourses, loyer, salaire de job étudiant. Prévoir 2-4 semaines.",
+    description: "Indispensable pour recevoir bourses, payer le loyer et un job étudiant. Prévoir 2–4 semaines après l'arrivée. Certaines banques (N26, Revolut) permettent d'ouvrir avant le départ.",
     icon: "🏦",
     daysBeforeDeparture: 30,
     priority: "recommended",
     tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EU / EEA — free movement, no visa
+// SCHENGEN / EU — EU passport holders (free movement)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const EU_EEA_ONLY: RequirementDef[] = [
+const SCHENGEN_EU_EEA: RequirementDef[] = [
   {
     id: "eu_id_passport",
     type: "passport",
     label: "Carte d'identité ou passeport UE valide",
-    description: "Document d'identité valide pendant toute la durée du séjour. Une simple CNI suffit dans l'UE.",
+    description: "La carte nationale d'identité suffit pour tous les pays UE/EEA. Vérifier la date d'expiration : elle doit être valide pendant tout le séjour.",
     icon: "🛂",
     daysBeforeDeparture: -120,
     priority: "required",
     tiers: ["EU_EEA"],
-    note: "La carte d'identité suffit pour les pays UE/EEA. Le passeport est recommandé hors UE.",
+    destinations: ["SCHENGEN_EU"],
+    note: "Le passeport est recommandé si tu prévois de voyager hors de l'espace Schengen.",
   },
   {
     id: "ehic_card",
     type: "insurance",
     label: "Carte Européenne d'Assurance Maladie (CEAM)",
-    description: "Donne accès aux soins d'urgence dans tous les pays UE/EEA aux mêmes tarifs que les résidents.",
+    description: "Donne accès aux soins d'urgence dans tous les pays UE/EEA aux mêmes tarifs que les résidents. Gratuite, demandée auprès de ta caisse d'assurance maladie.",
     icon: "🏥",
     daysBeforeDeparture: -60,
     priority: "required",
     tiers: ["EU_EEA"],
+    destinations: ["SCHENGEN_EU"],
     link: "https://www.ameli.fr/assure/droits-demarches/europe-international/protection-sociale-europe/carte-europeenne-assurance-maladie",
+    linkLabel: "Demander la CEAM (Ameli.fr)",
+    note: "La CEAM ne couvre pas tout. Une assurance complémentaire est recommandée pour les soins non urgents.",
   },
   {
-    id: "eu_registration",
-    type: "registration",
-    label: "Enregistrement comme citoyen UE (si > 3 mois)",
-    description: "Dans de nombreux pays, les citoyens UE doivent s'enregistrer auprès des autorités locales pour les séjours > 3 mois.",
-    icon: "🏛️",
-    daysBeforeDeparture: 30,
-    priority: "recommended",
-    tiers: ["EU_EEA"],
-    note: "Délai variable selon le pays (ex : 8 jours en Belgique, 3 mois en France).",
-  },
-  {
-    id: "university_enrollment",
+    id: "eu_university_enrollment",
     type: "enrollment",
     label: "Inscription administrative à l'université d'accueil",
-    description: "S'inscrire officiellement dans l'université pour obtenir ta carte étudiante et accéder aux services.",
+    description: "S'inscrire officiellement pour obtenir ta carte étudiante et accéder aux services universitaires (bibliothèque, transports, logement).",
     icon: "✏️",
     daysBeforeDeparture: 7,
     priority: "required",
     tiers: ["EU_EEA"],
+    destinations: ["SCHENGEN_EU"],
+  },
+  {
+    id: "eu_registration",
+    type: "registration",
+    label: "Enregistrement comme citoyen UE (séjour > 3 mois)",
+    description: "Dans la plupart des pays UE, les citoyens européens doivent s'enregistrer auprès des autorités locales pour les séjours supérieurs à 3 mois.",
+    icon: "🏛️",
+    daysBeforeDeparture: 30,
+    priority: "recommended",
+    tiers: ["EU_EEA"],
+    destinations: ["SCHENGEN_EU"],
+    note: "Délai variable : 8 jours en Belgique, 3 mois en France, 3 mois en Espagne.",
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NON-EU — long-stay student visa required
+// SCHENGEN / EU — Non-EU passport holders (visa type D requis)
+// Source : https://education.ec.europa.eu/node/1775
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NON_EU_ONLY: RequirementDef[] = [
+const SCHENGEN_NON_EU: RequirementDef[] = [
   {
-    id: "passport_validity",
+    id: "passport_validity_schengen",
     type: "passport",
     label: "Passeport valide 6 mois après la fin du séjour",
-    description: "Le passeport doit rester valide au moins 6 mois après ta date de retour prévue.",
+    description: "Le passeport doit rester valide au moins 6 mois après ta date de retour prévue. Vérifier également qu'il reste des pages vierges pour les tampons.",
     icon: "🛂",
     daysBeforeDeparture: -180,
     priority: "required",
     tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
+  },
+  {
+    id: "consular_appointment_schengen",
+    type: "appointment",
+    label: "Rendez-vous consulaire (ambassade / consulat)",
+    description: "Prendre rendez-vous au consulat du pays de destination dans ton pays d'origine dès que possible. Les créneaux partent souvent 4–6 semaines à l'avance.",
+    icon: "📅",
+    daysBeforeDeparture: -100,
+    priority: "required",
+    tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
+    link: "https://www.schengenvisainfo.com/embassies-consulates/",
+    linkLabel: "Trouver le consulat compétent",
+    note: "Prendre RDV dans le pays où tu résides légalement, au consulat du pays où tu étudies.",
   },
   {
     id: "visa_student_d",
     type: "visa",
     label: "Visa étudiant long séjour (type D)",
-    description: "Obligatoire pour un séjour > 90 jours. À demander au consulat du pays de destination dans ton pays d'origine.",
+    description: "Obligatoire pour tout séjour d'études > 90 jours dans un pays Schengen. Le visa D est spécifique au pays de destination — il ne donne pas accès à tous les pays Schengen comme un visa C.",
     icon: "📋",
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["NON_EU"],
-    note: "Délai de traitement : 2 à 8 semaines selon le consulat. Commencer tôt.",
+    destinations: ["SCHENGEN_EU"],
+    link: "https://education.ec.europa.eu/node/1775",
+    linkLabel: "Guide officiel UE — Visa étudiant",
+    note: "Délai de traitement : 3 à 8 semaines selon le consulat. Ne pas attendre la dernière minute.",
   },
   {
-    id: "visa_photos",
+    id: "visa_photos_schengen",
     type: "photos",
     label: "Photos d'identité biométriques",
-    description: "Généralement 2 photos aux normes biométriques (35x45mm, fond blanc) requises pour le dossier visa.",
+    description: "2 photos au format biométrique (35×45 mm, fond blanc, moins de 6 mois) requises pour le dossier de visa.",
     icon: "📸",
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
   },
   {
     id: "schengen_insurance",
     type: "insurance",
     label: "Assurance santé Schengen (min. 30 000 €)",
-    description: "Obligatoire pour le visa. Couverture médicale d'urgence et rapatriement min. 30 000 € pour toute la durée du séjour.",
+    description: "Obligatoire pour le visa. Doit couvrir les urgences médicales et le rapatriement pour un minimum de 30 000 € sur toute la durée du séjour.",
     icon: "🏥",
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["NON_EU"],
-    note: "Certains consulats exigent une assurance valable dès l'arrivée. Vérifier la date de début.",
+    destinations: ["SCHENGEN_EU"],
+    link: "https://www.axa-schengen.com/en",
+    linkLabel: "AXA Schengen — Assurance voyage",
+    note: "Vérifier que la date de début d'assurance coïncide avec ton arrivée — certains consulats l'exigent.",
   },
   {
-    id: "proof_of_funds",
+    id: "proof_of_funds_schengen",
     type: "funds",
     label: "Justificatif de ressources financières",
-    description: "Preuve que tu peux subvenir à tes besoins : relevés bancaires, attestation de bourse, ou garantie parentale. Montant minimal variable selon le pays (700–1 000 €/mois).",
+    description: "Relevés bancaires des 3 derniers mois, attestation de bourse ou garantie parentale. Montant minimum : 700 à 1 000 €/mois selon le pays (ex. 615 €/mois en France pour 2024–25).",
     icon: "💰",
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
   },
   {
-    id: "consular_appointment",
-    type: "appointment",
-    label: "Rendez-vous consulaire",
-    description: "Prendre rendez-vous au consulat / ambassade du pays de destination dès que possible.",
-    icon: "📅",
-    daysBeforeDeparture: -100,
-    priority: "required",
-    tiers: ["NON_EU"],
-    note: "Les rendez-vous peuvent être pris des semaines à l'avance. Ne pas attendre.",
-  },
-  {
-    id: "residence_permit",
+    id: "residence_permit_schengen",
     type: "residence_permit",
     label: "Titre de séjour / Permis de résidence",
-    description: "Dans certains pays, le visa D doit être converti en titre de séjour dans les 3 mois suivant l'arrivée (ex : Certificat de résidence en Espagne, Carte de séjour en France).",
+    description: "Dans la majorité des pays Schengen, le visa D doit être converti en titre de séjour dans les premiers mois suivant l'arrivée. Exemple : carte de séjour en France, Aufenthaltstitel en Allemagne.",
     icon: "📇",
     daysBeforeDeparture: 60,
     priority: "required",
     tiers: ["NON_EU"],
-    note: "Délai variable selon le pays : France (4 mois), Espagne (30 jours), Allemagne (3 mois).",
+    destinations: ["SCHENGEN_EU"],
+    note: "France : 4 mois max · Allemagne : 3 mois · Espagne : 1 mois · Pays-Bas : dès l'arrivée.",
   },
   {
-    id: "local_registration_non_eu",
+    id: "local_registration_schengen",
     type: "registration",
     label: "Enregistrement auprès des autorités locales",
-    description: "Obligation légale dans la plupart des pays Schengen : s'enregistrer à la mairie, préfecture ou bureau d'immigration local dans les 8 jours suivant l'arrivée.",
+    description: "Obligation légale dans la plupart des pays Schengen : déclaration de domicile à la mairie, préfecture ou Einwohnermeldeamt (Allemagne) dans les 8 jours suivant l'installation.",
     icon: "🏛️",
     daysBeforeDeparture: 8,
     priority: "required",
     tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
   },
   {
-    id: "university_enrollment_non_eu",
+    id: "university_enrollment_schengen",
     type: "enrollment",
     label: "Inscription administrative à l'université d'accueil",
-    description: "S'inscrire officiellement pour obtenir ta carte étudiante — souvent nécessaire pour le titre de séjour.",
+    description: "S'inscrire officiellement pour obtenir ta carte étudiante, souvent nécessaire pour le dossier de titre de séjour.",
     icon: "✏️",
     daysBeforeDeparture: 7,
     priority: "required",
     tiers: ["NON_EU"],
+    destinations: ["SCHENGEN_EU"],
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPORT — full catalogue
+// USA — Visa F-1 (tous passeports — même citoyens EU)
+// Source : https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html
+// ─────────────────────────────────────────────────────────────────────────────
+
+const USA_ALL: RequirementDef[] = [
+  {
+    id: "passport_validity_usa",
+    type: "passport",
+    label: "Passeport valide 6 mois après la fin du séjour",
+    description: "Exigé par les autorités américaines. Vérifier l'accord bilatéral de ton pays (certains n'ont que 30 jours de validité post-séjour requise).",
+    icon: "🛂",
+    daysBeforeDeparture: -180,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+  },
+  {
+    id: "usa_sevis_accepted",
+    type: "acceptance",
+    label: "Admission dans une université certifiée SEVP",
+    description: "L'université doit être agréée par le Student and Exchange Visitor Program (SEVP) du gouvernement américain pour pouvoir émettre un I-20.",
+    icon: "🎓",
+    daysBeforeDeparture: -120,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://studyinthestates.dhs.gov/school-search",
+    linkLabel: "Vérifier la certification SEVP de l'université",
+  },
+  {
+    id: "form_i20",
+    type: "i20",
+    label: "Formulaire I-20 (Certificate of Eligibility)",
+    description: "Document officiel émis par l'université américaine. Nécessaire pour payer la taxe SEVIS et obtenir le visa F-1. Le signer avant le rendez-vous au consulat.",
+    icon: "📋",
+    daysBeforeDeparture: -100,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://studyinthestates.dhs.gov/students/prepare/students-and-the-form-i-20",
+    linkLabel: "Tout savoir sur le formulaire I-20",
+  },
+  {
+    id: "sevis_fee",
+    type: "sevis_fee",
+    label: "Paiement de la taxe SEVIS (I-901) — 350 $",
+    description: "Frais obligatoires payés en ligne sur fmjfee.com avant le rendez-vous visa. Conserver le reçu — il est demandé lors de l'entretien consulaire.",
+    icon: "💳",
+    daysBeforeDeparture: -95,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://www.fmjfee.com/",
+    linkLabel: "Payer la taxe SEVIS (I-901)",
+  },
+  {
+    id: "ds160_form",
+    type: "ds160",
+    label: "Formulaire DS-160 (demande de visa en ligne)",
+    description: "Formulaire de demande de visa non-immigrant à remplir en ligne. Une fois soumis, imprimer la page de confirmation pour l'apporter au consulat.",
+    icon: "💻",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://ceac.state.gov/genniv/",
+    linkLabel: "Remplir le DS-160 en ligne",
+  },
+  {
+    id: "usa_consular_appointment",
+    type: "appointment",
+    label: "Rendez-vous à l'ambassade / consulat américain",
+    description: "Prendre RDV sur le site de l'ambassade américaine dans ton pays. Les délais peuvent être longs (parfois plusieurs mois). À planifier dès la réception du I-20.",
+    icon: "📅",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html",
+    linkLabel: "Informations officielles visa F-1 (State Dept.)",
+    note: "Le délai moyen pour un RDV varie de 2 semaines à 6 mois selon le pays.",
+  },
+  {
+    id: "f1_visa",
+    type: "visa",
+    label: "Visa étudiant F-1",
+    description: "Visa obligatoire pour les études aux États-Unis (même pour les citoyens UE). Valable pour la durée des études + 60 jours de grâce après la fin du programme.",
+    icon: "📋",
+    daysBeforeDeparture: -80,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://travel.state.gov/content/travel/en/us-visas/study/student-visa.html",
+    linkLabel: "Guide officiel visa F-1",
+  },
+  {
+    id: "usa_insurance",
+    type: "insurance",
+    label: "Assurance santé (obligatoire pour l'université)",
+    description: "La plupart des universités américaines exigent une assurance santé. Certaines proposent leur propre plan (souvent obligatoire), d'autres acceptent une assurance externe. Les frais médicaux sans assurance peuvent être extrêmement élevés.",
+    icon: "🏥",
+    daysBeforeDeparture: -30,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    note: "Vérifier si ton université impose son propre plan ou accepte une assurance externe.",
+  },
+  {
+    id: "usa_ssn",
+    type: "ssn",
+    label: "Demande de Social Security Number (si travail)",
+    description: "Le SSN est nécessaire uniquement si tu travailles sur le campus (autorisé avec un F-1). La demande se fait en personne au bureau Social Security Administration après l'arrivée.",
+    icon: "🪪",
+    daysBeforeDeparture: 30,
+    priority: "recommended",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://www.ssa.gov/ssnumber/",
+    linkLabel: "Social Security Administration",
+  },
+  {
+    id: "usa_port_entry",
+    type: "enrollment",
+    label: "Enregistrement à l'université + International Student Office",
+    description: "Contacter l'International Student Office (ISO) dès l'arrivée pour valider ton statut F-1 dans le système SEVIS et t'inscrire aux cours.",
+    icon: "✏️",
+    daysBeforeDeparture: 3,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["USA"],
+    link: "https://studyinthestates.dhs.gov/students/maintaining-status",
+    linkLabel: "Maintenir son statut F-1",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CANADA — Permis d'études (tous passeports)
+// Source : https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit.html
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CANADA_ALL: RequirementDef[] = [
+  {
+    id: "passport_validity_canada",
+    type: "passport",
+    label: "Passeport valide pendant tout le séjour",
+    description: "Le permis d'études ne peut pas dépasser la date d'expiration de ton passeport. S'assurer que le passeport est valide pour toute la durée des études + marge de sécurité.",
+    icon: "🛂",
+    daysBeforeDeparture: -180,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+  },
+  {
+    id: "canada_acceptance",
+    type: "acceptance",
+    label: "Lettre d'acceptation d'une université désignée (DLI)",
+    description: "L'établissement doit figurer sur la liste des établissements d'enseignement désignés (DLI). La lettre d'acceptation est obligatoire pour la demande de permis d'études.",
+    icon: "🎓",
+    daysBeforeDeparture: -120,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/get-documents.html",
+    linkLabel: "Vérifier les DLI reconnus (Canada.ca)",
+  },
+  {
+    id: "canada_pal",
+    type: "pal",
+    label: "Lettre d'attestation provinciale (PAL / CAQ pour Québec)",
+    description: "Obligatoire depuis 2024 pour la plupart des programmes universitaires. La PAL est émise par la province où se situe l'université. Au Québec, il s'agit du Certificat d'acceptation du Québec (CAQ).",
+    icon: "📜",
+    daysBeforeDeparture: -120,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/get-documents.html",
+    linkLabel: "Obtenir la PAL — Canada.ca",
+    note: "Québec : demander le CAQ sur le site du Ministère de l'Immigration du Québec (MIFI).",
+  },
+  {
+    id: "canada_study_permit",
+    type: "visa",
+    label: "Permis d'études canadien",
+    description: "Obligatoire pour les études de plus de 6 mois au Canada (pour la majorité des pays). À demander en ligne sur le portail IRCC. Délai de traitement : 4 à 12 semaines.",
+    icon: "📋",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit.html",
+    linkLabel: "Demander le permis d'études (IRCC)",
+  },
+  {
+    id: "canada_proof_funds",
+    type: "funds",
+    label: "Preuve de ressources financières (min. 20 635 $ CAD/an)",
+    description: "Depuis 2024, le montant minimum requis pour les frais de subsistance est de 20 635 $ CAD par an (hors frais de scolarité). Fournir relevés bancaires ou attestation de bourse.",
+    icon: "💰",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/get-documents.html",
+    linkLabel: "Ressources financières requises — IRCC",
+    note: "Montant mis à jour en janvier 2024. Vérifier le montant actuel sur Canada.ca.",
+  },
+  {
+    id: "canada_insurance",
+    type: "insurance",
+    label: "Assurance santé provinciale / complémentaire",
+    description: "La couverture santé varie par province. Certaines (Ontario, Colombie-Britannique) couvrent les étudiants internationaux après un délai d'attente. Une assurance privée est indispensable en attendant l'activation.",
+    icon: "🏥",
+    daysBeforeDeparture: -30,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    note: "Québec : la RAMQ couvre les étudiants de pays avec accord bilatéral (France incluse). Vérifier ton éligibilité.",
+  },
+  {
+    id: "canada_eta",
+    type: "eta",
+    label: "Autorisation de voyage électronique (AVE / eTA)",
+    description: "Si tu voyages en avion vers le Canada et que tu n'as pas besoin de visa, tu dois obtenir une AVE (Autorisation de Voyage Électronique). Rapide et peu coûteux (7 $ CAD). Non requise si tu as un visa canadien.",
+    icon: "✈️",
+    daysBeforeDeparture: -30,
+    priority: "required",
+    tiers: ["EU_EEA"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/immigration-refugees-citizenship/services/visit-canada/eta/apply.html",
+    linkLabel: "Demander l'AVE (7 $ CAD)",
+    note: "Citoyens français, belges, suisses et autres ressortissants UE : l'AVE est requise pour entrer au Canada en avion.",
+  },
+  {
+    id: "canada_sin",
+    type: "sin",
+    label: "Numéro d'assurance sociale (NAS) — si travail",
+    description: "Nécessaire pour travailler légalement au Canada (autorisé jusqu'à 20h/semaine hors campus avec un permis d'études valide). Demande en personne dans un centre Service Canada après l'arrivée.",
+    icon: "🪪",
+    daysBeforeDeparture: 14,
+    priority: "recommended",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+    link: "https://www.canada.ca/en/employment-social-development/services/sin.html",
+    linkLabel: "Obtenir un NAS — Service Canada",
+  },
+  {
+    id: "canada_enrollment",
+    type: "enrollment",
+    label: "Inscription à l'université + bureau des étudiants internationaux",
+    description: "Confirmer ton inscription en personne au bureau international dès ton arrivée. Nécessaire pour valider le permis d'études et accéder aux services universitaires.",
+    icon: "✏️",
+    daysBeforeDeparture: 3,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["CANADA"],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ALL_REQUIREMENTS: RequirementDef[] = [
-  ...SHARED,
-  ...EU_EEA_ONLY,
-  ...NON_EU_ONLY,
+  ...COMMON,
+  ...SCHENGEN_EU_EEA,
+  ...SCHENGEN_NON_EU,
+  ...USA_ALL,
+  ...CANADA_ALL,
 ];

@@ -8,6 +8,7 @@
  */
 
 import { getBestTier } from "./passport-tiers";
+import { getDestinationZone } from "./supported-destinations";
 import { ALL_REQUIREMENTS, type RequirementDef, type DocStatus } from "./requirements";
 
 // ── Input ────────────────────────────────────────────────────────────────────
@@ -100,13 +101,18 @@ export function buildChecklist(
     return [];
   }
 
-  const tier      = getBestTier(input.passportCodes);
+  const tier = getBestTier(input.passportCodes);
+  const zone = getDestinationZone(input.destinationCountry);
+
+  // Unsupported destination → no checklist
+  if (!zone) return [];
+
   const departure = toDate(input.startDate);
   const now       = new Date();
 
   const items: ChecklistItem[] = ALL_REQUIREMENTS
-    // 1. Filter by tier
-    .filter((req) => req.tiers.includes(tier))
+    // 1. Filter by tier and destination zone
+    .filter((req) => req.tiers.includes(tier) && req.destinations.includes(zone))
     // 2. Build full item
     .map((req): ChecklistItem => {
       const dl    = deadlineDate(departure, req.daysBeforeDeparture);
