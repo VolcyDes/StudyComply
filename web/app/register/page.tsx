@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
-import { setRole } from "../../lib/auth";
+import { setRole as saveRole } from "../../lib/auth";
 
 type Role = "STUDENT" | "UNIVERSITY";
 
@@ -31,7 +31,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("STUDENT");
+  const [role, setRoleState] = useState<Role>("STUDENT");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,8 +52,8 @@ export default function RegisterPage() {
       const data = await res.json();
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
-      // Store role explicitly — use API response role if available, otherwise form selection
-      setRole(data?.user?.role ?? role);
+      // Save role to localStorage — use API response if available, otherwise form selection
+      saveRole(data?.user?.role ?? role);
       router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Échec d'inscription");
@@ -89,7 +89,7 @@ export default function RegisterPage() {
                     <button
                       key={r.value}
                       type="button"
-                      onClick={() => setRole(r.value)}
+                      onClick={() => setRoleState(r.value)}
                       className={`rounded-xl border-2 p-4 text-left transition ${
                         role === r.value ? r.color : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
