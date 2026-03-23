@@ -2,20 +2,31 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getAccountKindClient } from "../../../lib/meClient";
+
+function getRoleFromToken(): string | null {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return (payload?.role ?? "").toString().toUpperCase();
+  } catch {
+    return null;
+  }
+}
 
 export default function StudentDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    (async () => {
-      try {
-        const kind = await getAccountKindClient();
-        if (kind !== "student") router.replace("/university/dashboard");
-      } catch {
-        router.replace("/login");
-      }
-    })();
+    const role = getRoleFromToken();
+    if (!role) {
+      router.replace("/login");
+      return;
+    }
+    // Wrong role → routing hub decides where to go (no direct cross-redirect)
+    if (role === "UNIVERSITY") {
+      router.replace("/dashboard");
+    }
   }, [router]);
 
   return <>{children}</>;

@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
-import { getAccountKindClient } from "../../lib/meClient";
-
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -30,8 +28,8 @@ export default function LoginPage() {
       const data = await res.json();
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
-      const kind = await getAccountKindClient();
-      router.replace(kind === "university" ? "/university/dashboard" : "/student/dashboard");
+      // Always go through the routing hub — it reads the JWT role and redirects correctly
+      router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Échec de connexion");
     } finally {

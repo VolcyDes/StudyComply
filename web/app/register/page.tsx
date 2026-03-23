@@ -52,8 +52,8 @@ export default function RegisterPage() {
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
       // Use the role from the API response directly (or fall back to the form selection)
-      const returnedRole: string = (data?.user?.role ?? role).toUpperCase();
-      router.replace(returnedRole === "UNIVERSITY" ? "/university/dashboard" : "/student/dashboard");
+      // Always go through the routing hub — it reads the JWT role and redirects correctly
+      router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Échec d'inscription");
     } finally {
