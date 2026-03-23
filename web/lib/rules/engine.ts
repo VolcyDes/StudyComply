@@ -7,7 +7,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { getBestTier } from "./passport-tiers";
+import { getBestTier, getTier } from "./passport-tiers";
 import { getDestinationZone } from "./supported-destinations";
 import { ALL_REQUIREMENTS, type RequirementDef, type DocStatus } from "./requirements";
 
@@ -110,9 +110,21 @@ export function buildChecklist(
   const departure = toDate(input.startDate);
   const now       = new Date();
 
+  // Compute stay duration in days for duration-aware filtering
+  const stayDays = input.endDate
+    ? Math.max(1, Math.round(
+        (toDate(input.endDate).getTime() - toDate(input.startDate).getTime()) / (1000 * 60 * 60 * 24)
+      ))
+    : 365; // Default to a full year if no end date provided
+
   const items: ChecklistItem[] = ALL_REQUIREMENTS
-    // 1. Filter by tier and destination zone
-    .filter((req) => req.tiers.includes(tier) && req.destinations.includes(zone))
+    // 1. Filter by tier, destination zone, and stay duration
+    .filter((req) =>
+      req.tiers.includes(tier) &&
+      req.destinations.includes(zone) &&
+      (req.minStayDays === undefined || stayDays >= req.minStayDays) &&
+      (req.maxStayDays === undefined || stayDays <= req.maxStayDays)
+    )
     // 2. Build full item
     .map((req): ChecklistItem => {
       const dl    = deadlineDate(departure, req.daysBeforeDeparture);
@@ -159,4 +171,60 @@ export function summarise(items: ChecklistItem[]): ChecklistSummary {
   const score    = required.length ? Math.round((done / required.length) * 100) : 0;
 
   return { total: required.length, done, overdue, critical, score };
+}
+
+// ── Passport Advice ───────────────────────────────────────────────────────────
+
+export type PassportAdvice = {
+  /** The passport code that minimises required steps. */
+  recommendedCode: string;
+  /** How many fewer required steps this passport has vs. the worst option. */
+  savedSteps: number;
+  /** All passport codes sorted from best to worst. */
+  rankedCodes: Array<{ code: string; requiredCount: number }>;
+};
+
+/**
+ * When a student holds multiple passports, computes which one leads to the
+ * fewest required steps for the given trip. Returns null if only one passport
+ * is held or if all passports lead to the same number of steps.
+ */
+export function getPassportAdvice(input: ChecklistInput): PassportAdvice | null {
+  if (input.passportCodes.length < 2) return null;
+
+  const zone = getDestinationZone(input.destinationCountry);
+  if (!zone) return null;
+
+  const stayDays = input.endDate
+    ? Math.max(1, Math.round(
+        (toDate(input.endDate).getTime() - toDate(input.startDate).getTime()) / (1000 * 60 * 60 * 24)
+      ))
+    : 365;
+
+  const ranked = input.passportCodes.map((code) => {
+    const tier = getTier(code);
+    const requiredCount = ALL_REQUIREMENTS.filter(
+      (req) =>
+        req.tiers.includes(tier) &&
+        req.destinations.includes(zone) &&
+        req.priority === "required" &&
+        (req.minStayDays === undefined || stayDays >= req.minStayDays) &&
+        (req.maxStayDays === undefined || stayDays <= req.maxStayDays)
+    ).length;
+    return { code, requiredCount };
+  });
+
+  ranked.sort((a, b) => a.requiredCount - b.requiredCount);
+
+  const best  = ranked[0];
+  const worst = ranked[ranked.length - 1];
+
+  // No benefit in recommending if all passports are equal
+  if (best.requiredCount === worst.requiredCount) return null;
+
+  return {
+    recommendedCode: best.code,
+    savedSteps:      worst.requiredCount - best.requiredCount,
+    rankedCodes:     ranked,
+  };
 }

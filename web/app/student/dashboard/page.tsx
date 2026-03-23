@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../../lib/config";
 import { clearAuth } from "../../../lib/auth";
-import { buildChecklist, summarise } from "../../../lib/rules/engine";
-import type { ChecklistItem } from "../../../lib/rules/engine";
+import { buildChecklist, summarise, getPassportAdvice } from "../../../lib/rules/engine";
+import type { ChecklistItem, PassportAdvice } from "../../../lib/rules/engine";
 import { SUPPORTED_DESTINATION_CODES, DESTINATION_GROUPS } from "../../../lib/rules/supported-destinations";
 import { ALL_COUNTRIES } from "../../../lib/countries";
 import { useLang } from "../../../lib/i18n";
@@ -338,6 +338,19 @@ export default function StudentDashboardPage() {
   );
   const summary = useMemo(() => summarise(checklist), [checklist]);
 
+  // ── Passport advice (only when multiple passports) ──
+  const passportAdvice = useMemo<PassportAdvice | null>(
+    () => project && passports.length > 1
+      ? getPassportAdvice({
+          passportCodes: passports.map((p) => p.countryCode),
+          destinationCountry: project.destinationCountry,
+          startDate: project.startDate,
+          endDate: project.endDate,
+        })
+      : null,
+    [project, passports],
+  );
+
   // ── Filtered & sorted documents ──
   const filteredDocs = useMemo(() => {
     let docs = [...documents];
@@ -506,6 +519,31 @@ export default function StudentDashboardPage() {
               }`}
               style={{ width: `${summary.score}%` }}
             />
+          </div>
+        )}
+
+        {/* Passport advice banner */}
+        {passportAdvice && (
+          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <span className="text-lg leading-none">🛂</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">{t.student.passportAdviceTitle}</p>
+              <p className="mt-0.5 text-xs text-amber-700">
+                {t.student.passportAdviceSave
+                  .replace("{code}", `${FLAGS[passportAdvice.recommendedCode] ?? ""} ${passportAdvice.recommendedCode}`)
+                  .replace("{n}", String(passportAdvice.savedSteps))
+                  .replace("{s}", passportAdvice.savedSteps > 1 ? "s" : "")
+                  .replace("{s}", passportAdvice.savedSteps > 1 ? "s" : "")}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {passportAdvice.rankedCodes.map((r) => (
+                  <span key={r.code} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${r.code === passportAdvice.recommendedCode ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300" : "bg-white text-gray-600 ring-1 ring-gray-200"}`}>
+                    {FLAGS[r.code] ?? ""} {r.code} · {r.requiredCount} {t.student.total}
+                    {r.code === passportAdvice.recommendedCode && " ✓"}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -860,6 +898,19 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
         <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{item.description}</p>
         {item.note && (
           <p className="mt-1 text-xs text-amber-600 leading-relaxed">ℹ️ {item.note}</p>
+        )}
+        {item.durationNote && (
+          <p className="mt-1 text-xs text-violet-600 leading-relaxed">{t.student.durationOnly} {item.durationNote}</p>
+        )}
+        {item.link && !done && (
+          <a
+            href={item.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
+          >
+            🔗 {item.linkLabel ?? t.student.officialLink}
+          </a>
         )}
       </div>
 

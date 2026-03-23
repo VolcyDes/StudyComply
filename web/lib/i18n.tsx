@@ -134,6 +134,12 @@ export const TRANSLATIONS = {
       timeline:        "Calendrier",
       checklist:       "Checklist",
       noDocsFilter:    "Aucun document pour ce filtre.",
+      // Passport advice
+      passportAdviceTitle: "💡 Recommandation passeport",
+      passportAdviceSave:  "Utilise ton passeport {code} — il te fait économiser {n} étape{s} obligatoire{s}.",
+      passportAdviceEqual: "Tous tes passeports mènent au même nombre de démarches.",
+      applyLink:           "→ Postuler",
+      durationOnly:        "ℹ️",
       // Project modal
       modalNewProject: "Nouveau projet de mobilité",
       modalEditProject:"Modifier le projet",
@@ -372,6 +378,12 @@ export const TRANSLATIONS = {
       timeline:        "Timeline",
       checklist:       "Checklist",
       noDocsFilter:    "No documents for this filter.",
+      // Passport advice
+      passportAdviceTitle: "💡 Passport recommendation",
+      passportAdviceSave:  "Use your {code} passport — it saves you {n} required step{s}.",
+      passportAdviceEqual: "All your passports lead to the same number of steps.",
+      applyLink:           "→ Apply",
+      durationOnly:        "ℹ️",
       // Project modal
       modalNewProject: "New mobility project",
       modalEditProject:"Edit project",
