@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../../lib/config";
 import { clearAuth } from "../../../lib/auth";
+import { useLang } from "../../../lib/i18n";
 
 type User = { id: string; email: string; role: string };
 
@@ -66,6 +67,7 @@ const FEATURES = [
 
 export default function UniversityDashboardPage() {
   const router = useRouter();
+  const { t } = useLang();
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -113,14 +115,13 @@ export default function UniversityDashboardPage() {
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
-              🏛️ Espace université
+              🏛️ {t.nav.spaceUniv}
             </span>
             <h1 className="mt-3 text-3xl font-bold">
-              Bonjour{firstName ? `, ${firstName}` : ""} 👋
+              {t.university.greeting}{firstName ? `, ${firstName}` : ""} 👋
             </h1>
             <p className="mt-1.5 text-violet-200 text-sm max-w-lg leading-relaxed">
-              Votre espace université est en cours de déploiement.
-              Les fonctionnalités avancées arrivent très prochainement.
+              {t.university.subtitle}
             </p>
           </div>
 
@@ -132,7 +133,7 @@ export default function UniversityDashboardPage() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Se déconnecter
+            {t.university.logout}
           </button>
         </div>
       </div>

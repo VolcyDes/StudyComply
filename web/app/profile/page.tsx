@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
 import { clearAuth, getRole } from "../../lib/auth";
 import { ALL_COUNTRIES, type Country } from "../../lib/countries";
+import { useLang } from "../../lib/i18n";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -208,6 +209,7 @@ function ComingSoonField({ label, placeholder }: { label: string; placeholder: s
 export default function ProfilePage() {
   const router = useRouter();
   const toast  = useToast();
+  const { t, lang, setLang } = useLang();
 
   const [user,    setUser]    = useState<User | null>(null);
   const [role,    setRoleState] = useState<"UNIVERSITY" | "STUDENT" | null>(null);
@@ -358,28 +360,47 @@ export default function ProfilePage() {
           {isUniversity ? "🏛️" : "🎓"}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Mon profil</h1>
-          <p className="text-sm text-gray-500">
-            {isUniversity ? "Paramètres de votre établissement" : "Gère tes passeports et informations personnelles"}
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t.profile.title}</h1>
+          <p className="text-sm text-gray-500">{t.profile.subtitle}</p>
         </div>
       </div>
 
+      {/* ── Langue ── */}
+      <SectionCard title={t.profile.langSection} icon="🌐">
+        <p className="text-sm text-gray-500 mb-4">{t.profile.langDesc}</p>
+        <div className="grid grid-cols-2 gap-3">
+          {(["fr", "en"] as const).map((l) => (
+            <button key={l} type="button" onClick={() => setLang(l)}
+              className={`flex items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-sm font-medium transition ${
+                lang === l
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 text-gray-700 hover:border-gray-300"
+              }`}>
+              <span>{l === "fr" ? t.profile.langFr : t.profile.langEn}</span>
+              {lang === l && (
+                <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  {t.profile.langActive}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </SectionCard>
+
       {/* ── Compte ── */}
-      <SectionCard title="Compte" icon="👤">
+      <SectionCard title={t.profile.accountTitle} icon="👤">
         <div className="space-y-4">
           <div>
-            <label className="text-xs font-medium uppercase tracking-wider text-gray-400">Adresse email</label>
+            <label className="text-xs font-medium uppercase tracking-wider text-gray-400">{t.profile.email}</label>
             <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-800">
               {user?.email ?? "—"}
               <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                 isUniversity ? "bg-violet-100 text-violet-700" : "bg-indigo-100 text-indigo-700"
               }`}>
-                {isUniversity ? "Université" : "Étudiant"}
+                {isUniversity ? t.profile.roleUniv : t.profile.roleStudent}
               </span>
             </div>
           </div>
-          <ComingSoonField label="Mot de passe" placeholder="Modifier le mot de passe" />
         </div>
       </SectionCard>
 

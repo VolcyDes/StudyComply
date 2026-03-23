@@ -4,14 +4,17 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearAuth, getRole, hasToken } from "../../lib/auth";
+import { useLang } from "../../lib/i18n";
 
 export default function TopNav() {
   const router   = useRouter();
   const pathname = usePathname();
-  const [authed, setAuthed]   = useState(false);
-  const [email, setEmail]     = useState<string | null>(null);
-  const [role,  setRoleState] = useState<"UNIVERSITY" | "STUDENT" | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { t, lang, toggleLang } = useLang();
+
+  const [authed,    setAuthed]    = useState(false);
+  const [email,     setEmail]     = useState<string | null>(null);
+  const [role,      setRoleState] = useState<"UNIVERSITY" | "STUDENT" | null>(null);
+  const [menuOpen,  setMenuOpen]  = useState(false);
 
   useEffect(() => {
     if (!hasToken()) { setAuthed(false); setEmail(null); setRoleState(null); return; }
@@ -49,7 +52,7 @@ export default function TopNav() {
             <div className="text-sm font-bold text-gray-900">StudyComply</div>
             {authed && role && (
               <div className={`text-[10px] font-medium ${isUniversity ? "text-violet-500" : "text-indigo-500"}`}>
-                {isUniversity ? "Espace Université" : "Espace Étudiant"}
+                {isUniversity ? t.nav.spaceUniv : t.nav.spaceStudent}
               </div>
             )}
           </div>
@@ -59,25 +62,37 @@ export default function TopNav() {
         {authed && (
           <nav className="hidden md:flex items-center gap-1">
             <NavLink href={dashboardHref} active={pathname.startsWith(isUniversity ? "/university" : "/student")}>
-              Dashboard
+              {t.nav.dashboard}
             </NavLink>
             <NavLink href="/profile" active={pathname === "/profile"}>
-              Profil
+              {t.nav.profile}
             </NavLink>
           </nav>
         )}
 
         {/* Right zone */}
         <div className="flex items-center gap-2">
+
+          {/* Language toggle — always visible */}
+          <button
+            onClick={toggleLang}
+            title={lang === "fr" ? "Switch to English" : "Passer en français"}
+            className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+          >
+            <span className={lang === "fr" ? "opacity-100" : "opacity-40"}>FR</span>
+            <span className="text-gray-300">|</span>
+            <span className={lang === "en" ? "opacity-100" : "opacity-40"}>EN</span>
+          </button>
+
           {!authed ? (
             <>
               <Link href="/login"
                 className="rounded-xl px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 transition">
-                Se connecter
+                {t.nav.login}
               </Link>
               <Link href="/register"
                 className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 transition">
-                Créer un compte
+                {t.nav.register}
               </Link>
             </>
           ) : (
@@ -105,27 +120,26 @@ export default function TopNav() {
               {/* Dropdown */}
               {menuOpen && (
                 <>
-                  {/* Backdrop */}
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
                     {/* User info */}
                     <div className="border-b border-gray-100 px-4 py-3">
-                      <p className="text-xs text-gray-400">Connecté en tant que</p>
+                      <p className="text-xs text-gray-400">{t.nav.loggedAs}</p>
                       <p className="mt-0.5 truncate text-sm font-medium text-gray-900">{email}</p>
                       <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         isUniversity ? "bg-violet-100 text-violet-700" : "bg-indigo-100 text-indigo-700"
                       }`}>
-                        {isUniversity ? "🏛 Université" : "🎓 Étudiant"}
+                        {isUniversity ? t.nav.roleUniv : t.nav.roleStudent}
                       </span>
                     </div>
 
                     {/* Links */}
                     <div className="py-1">
                       <DropdownLink href={dashboardHref} onClick={() => setMenuOpen(false)}>
-                        Dashboard
+                        {t.nav.dashboard}
                       </DropdownLink>
                       <DropdownLink href="/profile" onClick={() => setMenuOpen(false)}>
-                        Mon profil
+                        {t.nav.profile}
                       </DropdownLink>
                     </div>
 
@@ -138,7 +152,7 @@ export default function TopNav() {
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        Se déconnecter
+                        {t.nav.logout}
                       </button>
                     </div>
                   </div>

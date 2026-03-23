@@ -9,6 +9,7 @@ import { buildChecklist, summarise } from "../../../lib/rules/engine";
 import type { ChecklistItem } from "../../../lib/rules/engine";
 import { SUPPORTED_DESTINATION_CODES, DESTINATION_GROUPS } from "../../../lib/rules/supported-destinations";
 import { ALL_COUNTRIES } from "../../../lib/countries";
+import { useLang } from "../../../lib/i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,8 +52,8 @@ async function safeJson(res: Response) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
+function fmtDate(iso: string, locale = "fr-FR") {
+  return new Date(iso).toLocaleDateString(locale, { month: "short", year: "numeric" });
 }
 function fmtDateInput(iso: string) {
   return new Date(iso).toISOString().split("T")[0];
@@ -72,37 +73,35 @@ function fmtBytes(n: number) {
 
 // ─── Next Step ────────────────────────────────────────────────────────────────
 
-function computeNextStep(project: Project | null, passports: Passport[], documents: Document[]) {
+type StudentT = typeof import("../../../lib/i18n").TRANSLATIONS.fr.student;
+
+function computeNextStep(project: Project | null, passports: Passport[], documents: Document[], ts: StudentT) {
   if (!project) return {
-    icon:"🗺️", title:"Configure ton projet",
-    desc:"Indique ta destination et ton type de mobilité pour démarrer.",
-    cta:"Créer un projet", action:"project" as const,
+    icon:"🗺️", title: ts.nextProjectTitle, desc: ts.nextProjectDesc,
+    cta: ts.nextProjectCta, action:"project" as const,
     color:"from-violet-500 to-indigo-600",
   };
   if (passports.length === 0) return {
-    icon:"🛂", title:"Ajoute ton passeport",
-    desc:"Ton passeport est indispensable pour calculer tes exigences visa.",
-    cta:"Gérer mes passeports", action:"profile" as const,
+    icon:"🛂", title: ts.nextPassportTitle, desc: ts.nextPassportDesc,
+    cta: ts.nextPassportCta, action:"profile" as const,
     color:"from-amber-500 to-orange-600",
   };
-  const hasDoc = (t: string) => documents.some((d) => d.type === t && d.fileName);
+  const hasDoc = (type: string) => documents.some((d) => d.type === type && d.fileName);
   if (!hasDoc("visa")) return {
-    icon:"📋", title:"Dépose ton visa",
-    desc:"Upload ton visa pour suivre son expiration.",
-    cta:"Ajouter un document", action:"add-doc" as const,
+    icon:"📋", title: ts.nextDocsTitle, desc: ts.nextDocsDesc,
+    cta: ts.nextDocsCta, action:"add-doc" as const,
     color:"from-rose-500 to-pink-600",
   };
   const expiring = documents.find((d) => d.fileName && isExpiringSoon(d.expiresAt));
   if (expiring) return {
-    icon:"⏳", title:`${expiring.title} expire bientôt`,
-    desc:`Expire le ${fmtDate(expiring.expiresAt)}. Pense à le renouveler.`,
-    cta:"Voir mes documents", action:"scroll-docs" as const,
+    icon:"⏳", title:`${expiring.title}`,
+    desc:`${ts.expiry} ${fmtDate(expiring.expiresAt)}.`,
+    cta: ts.nextCheckCta, action:"scroll-docs" as const,
     color:"from-amber-500 to-yellow-600",
   };
   return {
-    icon:"✅", title:"Tout est en ordre !",
-    desc:"Continue à surveiller tes dates d'expiration.",
-    cta:"Voir le profil", action:"profile" as const,
+    icon:"✅", title: ts.nextDoneTitle, desc: ts.nextDoneDesc,
+    cta: ts.nextDoneCta, action:"profile" as const,
     color:"from-emerald-500 to-teal-600",
   };
 }
@@ -111,6 +110,7 @@ function computeNextStep(project: Project | null, passports: Passport[], documen
 
 export default function StudentDashboardPage() {
   const router = useRouter();
+  const { t, lang } = useLang();
 
   const [user,      setUser]      = useState<User | null>(null);
   const [project,   setProject]   = useState<Project | null>(null);
@@ -334,7 +334,7 @@ export default function StudentDashboardPage() {
     </div>
   );
 
-  const nextStep     = computeNextStep(project, passports, documents);
+  const nextStep     = computeNextStep(project, passports, documents, t.student);
   const docsWithFile = documents.filter((d) => d.fileName);
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -349,32 +349,28 @@ export default function StudentDashboardPage() {
         <div className="relative flex items-start justify-between gap-4 flex-wrap">
           <div>
             <span className="inline-flex items-center rounded-full bg-white/20 px-3 py-1 text-xs font-medium backdrop-blur">
-              🎓 Espace étudiant
+              🎓 {t.nav.spaceStudent}
             </span>
             <h1 className="mt-3 text-3xl font-bold">
-              Bonjour{user?.email ? `, ${user.email.split("@")[0]}` : ""} 👋
+              {t.student.greeting}{user?.email ? `, ${user.email.split("@")[0]}` : ""} 👋
             </h1>
             <p className="mt-1 text-indigo-200 text-sm">
               {project
-                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}`
-                : "Configure ton projet de mobilité pour commencer."}
+                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate, lang === "en" ? "en-GB" : "fr-FR")} → ${fmtDate(project.endDate, lang === "en" ? "en-GB" : "fr-FR")}`
+                : t.student.checklistEmpty}
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            <button
-              onClick={openProjectModal}
-              className="rounded-xl bg-white/20 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/30 transition"
-            >
-              {project ? "✏️ Modifier le projet" : "➕ Créer un projet"}
+            <button onClick={openProjectModal}
+              className="rounded-xl bg-white/20 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/30 transition">
+              {project ? t.student.editProject : t.student.createProject}
             </button>
-            <button
-              onClick={() => { clearAuth(); router.push("/login"); }}
-              className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/20 transition"
-            >
+            <button onClick={() => { clearAuth(); router.push("/login"); }}
+              className="flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur hover:bg-white/20 transition">
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
-              Déconnexion
+              {t.student.logout}
             </button>
           </div>
         </div>
@@ -382,17 +378,17 @@ export default function StudentDashboardPage() {
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon="🗺️" label="Destination"
-          value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)}` : "—"}
-          sub={project ? `${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}` : "Aucun projet"}
+        <StatCard icon="🗺️" label={t.student.statDest}
+          value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)}` : t.common.na}
+          sub={project ? `${fmtDate(project.startDate, lang === "en" ? "en-GB" : "fr-FR")} → ${fmtDate(project.endDate, lang === "en" ? "en-GB" : "fr-FR")}` : t.student.noDest}
           color="bg-indigo-50 border-indigo-100" iconBg="bg-indigo-100" />
-        <StatCard icon="📄" label="Conformité"
-          value={checklist.length > 0 ? `${summary.score}%` : `${docsWithFile.length} déposé${docsWithFile.length > 1 ? "s" : ""}`}
-          sub={checklist.length > 0 ? `${summary.done}/${summary.total} requis complétés` : "Configure un projet"}
+        <StatCard icon="📄" label={t.student.statCompliance}
+          value={checklist.length > 0 ? `${summary.score}%` : `${docsWithFile.length} ${docsWithFile.length > 1 ? t.student.docsDepositedPl : t.student.docsDeposited}`}
+          sub={checklist.length > 0 ? `${summary.done}/${summary.total} ${t.student.done}` : t.student.noProject}
           color="bg-violet-50 border-violet-100" iconBg="bg-violet-100" />
-        <StatCard icon="🛂" label="Passeports"
-          value={passports.length === 0 ? "Aucun" : `${passports.length} passeport${passports.length > 1 ? "s" : ""}`}
-          sub={passports.map((p) => p.countryCode).join(", ") || "Ajouter dans Profil"}
+        <StatCard icon="🛂" label={t.student.statPassports}
+          value={passports.length === 0 ? t.common.na : `${passports.length} passport${passports.length > 1 ? "s" : ""}`}
+          sub={passports.map((p) => p.countryCode).join(", ") || t.student.noPassports}
           color="bg-emerald-50 border-emerald-100" iconBg="bg-emerald-100" />
       </div>
 
@@ -427,7 +423,7 @@ export default function StudentDashboardPage() {
       <section>
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold">Checklist personnalisée</h2>
+            <h2 className="text-lg font-bold">{t.student.myChecklist}</h2>
             {checklist.length > 0 && passports.length > 0 && (
               <p className="text-xs text-gray-500 mt-0.5">
                 {passports.map(p => p.countryCode).join(", ")} → {project?.destinationCountry}
@@ -464,15 +460,13 @@ export default function StudentDashboardPage() {
         {checklist.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center">
             <p className="text-3xl">📋</p>
-            <p className="mt-2 font-medium text-gray-700">Checklist non disponible</p>
+            <p className="mt-2 font-medium text-gray-700">{t.student.myChecklist}</p>
             <p className="mt-1 text-sm text-gray-500">
-              {!project
-                ? "Crée un projet de mobilité pour générer ta checklist personnalisée."
-                : "Ajoute ton passeport dans ton profil pour personnaliser la checklist."}
+              {!project ? t.student.checklistEmpty : t.student.noPassportWarn}
             </p>
             {!project
-              ? <button onClick={openProjectModal} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Créer un projet</button>
-              : <Link href="/profile" className="mt-4 inline-block rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Ajouter un passeport</Link>
+              ? <button onClick={openProjectModal} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">{t.student.createProject}</button>
+              : <Link href="/profile" className="mt-4 inline-block rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">{t.student.goProfile}</Link>
             }
           </div>
         ) : (
@@ -492,21 +486,20 @@ export default function StudentDashboardPage() {
       {/* ── Mes documents ── */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Mes documents</h2>
+          <h2 className="text-lg font-bold">{t.student.myDocs}</h2>
           <button onClick={() => setShowAddDoc(true)}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition">
-            + Ajouter
+            {t.student.addDoc}
           </button>
         </div>
 
         {documents.length === 0 ? (
           <div className="rounded-2xl border border-dashed bg-gray-50 px-6 py-12 text-center">
             <p className="text-3xl">📁</p>
-            <p className="mt-2 font-medium text-gray-700">Aucun document</p>
-            <p className="mt-1 text-sm text-gray-500">Ajoute tes documents pour suivre leurs dates d'expiration.</p>
+            <p className="mt-2 font-medium text-gray-700">{t.student.noDocsYet}</p>
             <button onClick={() => setShowAddDoc(true)}
               className="mt-4 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700">
-              Ajouter un document
+              {t.student.addFirst}
             </button>
           </div>
         ) : (
@@ -527,16 +520,16 @@ export default function StudentDashboardPage() {
       {/* ── Modal : Projet ── */}
       {showProjectModal && (
         <Modal onClose={() => setShowProjectModal(false)}>
-          <h3 className="text-lg font-bold text-gray-900">{project ? "Modifier le projet" : "Nouveau projet de mobilité"}</h3>
-          <p className="mt-1 text-sm text-gray-500">Configure ta destination et ta période.</p>
+          <h3 className="text-lg font-bold text-gray-900">{project ? t.student.modalEditProject : t.student.modalNewProject}</h3>
+          <p className="mt-1 text-sm text-gray-500">{t.student.modalProjectSub}</p>
 
           <div className="mt-5 space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700">Pays de destination</label>
-              <p className="mt-0.5 text-xs text-gray-400">🌍 Europe (Schengen & UE), États-Unis, Canada</p>
+              <label className="text-sm font-medium text-gray-700">{t.student.destLabel}</label>
+              <p className="mt-0.5 text-xs text-gray-400">{t.student.destHint}</p>
               <input
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="Recherche (ex : France, Allemagne, États-Unis…)"
+                placeholder={t.student.destSearch}
                 value={countryQuery}
                 onChange={(e) => {
                   setCountryQuery(e.target.value);
@@ -583,7 +576,7 @@ export default function StudentDashboardPage() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-gray-700">Type de mobilité</label>
+              <label className="text-sm font-medium text-gray-700">{t.student.mobilityType}</label>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {PURPOSES.map(([val, label]) => (
                   <button key={val} type="button"
@@ -597,14 +590,14 @@ export default function StudentDashboardPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm font-medium text-gray-700">Date de départ</label>
+                <label className="text-sm font-medium text-gray-700">{t.student.departure}</label>
                 <input type="date"
                   className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={projForm.startDate}
                   onChange={(e) => setProjForm((f) => ({ ...f, startDate: e.target.value }))} />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Date de retour</label>
+                <label className="text-sm font-medium text-gray-700">{t.student.returnDate}</label>
                 <input type="date"
                   className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                   value={projForm.endDate}
@@ -621,16 +614,16 @@ export default function StudentDashboardPage() {
             {project && (
               <button onClick={() => { setShowProjectModal(false); deleteProject(); }}
                 className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition">
-                Supprimer
+                {t.common.delete}
               </button>
             )}
             <button onClick={() => setShowProjectModal(false)}
               className="flex-1 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50">
-              Annuler
+              {t.common.cancel}
             </button>
             <button onClick={saveProject} disabled={savingProj || !projForm.destinationCountry || !projForm.startDate || !projForm.endDate}
               className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition">
-              {savingProj ? <Spinner /> : project ? "Mettre à jour" : "Créer le projet"}
+              {savingProj ? <Spinner /> : t.student.saveProject}
             </button>
           </div>
         </Modal>
@@ -639,12 +632,12 @@ export default function StudentDashboardPage() {
       {/* ── Modal : Ajouter document ── */}
       {showAddDoc && (
         <Modal onClose={() => setShowAddDoc(false)}>
-          <h3 className="text-lg font-bold text-gray-900">Nouveau document</h3>
-          <p className="mt-1 text-sm text-gray-500">Renseigne les infos de base, tu pourras joindre un PDF ensuite.</p>
+          <h3 className="text-lg font-bold text-gray-900">{t.student.modalNewDoc}</h3>
+          <p className="mt-1 text-sm text-gray-500">{t.student.docTitle}</p>
 
           <div className="mt-5 space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700">Titre</label>
+              <label className="text-sm font-medium text-gray-700">{t.student.docTitle}</label>
               <input className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 placeholder="Ex: Passeport français"
                 value={newDoc.title}
@@ -661,7 +654,7 @@ export default function StudentDashboardPage() {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Date d'expiration</label>
+              <label className="text-sm font-medium text-gray-700">{t.student.docExpiry}</label>
               <input type="date"
                 className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 value={newDoc.expiresAt}
@@ -672,12 +665,12 @@ export default function StudentDashboardPage() {
           <div className="mt-6 flex gap-3">
             <button onClick={() => setShowAddDoc(false)}
               className="flex-1 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50">
-              Annuler
+              {t.common.cancel}
             </button>
             <button onClick={addDocument}
               disabled={addingDoc || !newDoc.title || !newDoc.expiresAt}
               className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">
-              {addingDoc ? <Spinner /> : "Enregistrer"}
+              {addingDoc ? <Spinner /> : t.common.save}
             </button>
           </div>
         </Modal>

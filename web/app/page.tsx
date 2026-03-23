@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useLang } from "../lib/i18n";
 
 // ─── Translations ──────────────────────────────────────────────────────────────
 
@@ -177,12 +177,8 @@ function StepCard({ n, title, desc }: { n: string; title: string; desc: string }
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const [lang, setLang] = useState<Lang>("fr");
+  const { lang, toggleLang } = useLang();
   const t = T[lang];
-
-  function toggleLang() {
-    setLang((l) => (l === "fr" ? "en" : "fr"));
-  }
 
   return (
     <div className="-mx-4 -mt-8 overflow-x-hidden">
