@@ -221,6 +221,7 @@ export default function ProfilePage() {
   const [selectedCode,    setSelectedCode]    = useState<string>("FR");
   const [adding,          setAdding]          = useState(false);
   const [confirmCode,     setConfirmCode]     = useState<string | null>(null);
+  const [addError,        setAddError]        = useState<string | null>(null);
 
   // ── Auth fetch ──────────────────────────────────────────────────────────────
 
@@ -247,6 +248,17 @@ export default function ProfilePage() {
 
     if (r === "STUDENT") {
       loadPassports().finally(() => setLoading(false));
+
+      // Re-fetch when the user navigates back to this page (Next.js router cache
+      // or browser bfcache can serve a stale snapshot without remounting).
+      const onVisible = () => { if (document.visibilityState === "visible") loadPassports(); };
+      const onFocus   = () => loadPassports();
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("focus", onFocus);
+      return () => {
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("focus", onFocus);
+      };
     } else {
       // University: just load user info
       const token = localStorage.getItem("token");
@@ -270,7 +282,13 @@ export default function ProfilePage() {
       }
       const raw  = await res.text();
       const data = raw ? JSON.parse(raw) : [];
-      setPassports(Array.isArray(data) ? data : (data?.items ?? []));
+      // Defensive extraction — handles [], {items:[]}, {data:[]}
+      const list = Array.isArray(data)         ? data
+                 : Array.isArray(data?.items)   ? data.items
+                 : Array.isArray(data?.data)    ? data.data
+                 : Array.isArray(data?.passports) ? data.passports
+                 : [];
+      setPassports(list);
     } catch (e: any) {
       // Only show a toast for non-auth errors (auth errors redirect to login)
       if (e?.message !== "Unauthorized" && e?.message !== "No token") {
@@ -279,13 +297,25 @@ export default function ProfilePage() {
     }
   }
 
+  /** Parse a raw API error string into a human-readable message. */
+  function parseApiError(raw: string): string {
+    try {
+      const obj = JSON.parse(raw);
+      const msg = obj?.message;
+      return Array.isArray(msg) ? msg[0] : String(msg ?? raw);
+    } catch { return raw; }
+  }
+
   async function addPassport() {
     const code = normalizeIso2(selectedCode);
     if (!code) return;
+    // Duplicate already blocked by isDuplicate disabling the button,
+    // but keep the guard in case of race conditions.
     if (passports.some((p) => normalizeIso2(p.countryCode) === code)) {
-      toast.err("Ce passeport est déjà dans ton profil.");
+      setAddError("Ce passeport est déjà dans ta liste.");
       return;
     }
+    setAddError(null);
     setAdding(true);
     try {
       const res = await authFetch("/api/v1/passports", {
@@ -294,14 +324,25 @@ export default function ProfilePage() {
         body: JSON.stringify({ countryCode: code }),
       });
       if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg || `Erreur ${res.status}`);
+        const raw = await res.text().catch(() => "");
+        throw new Error(parseApiError(raw) || `Erreur ${res.status}`);
       }
       // Reload from server to guarantee the state matches the DB
       await loadPassports();
       toast.ok("Passeport ajouté !");
+      // Reset selection to first country not already in list
+      const next = countries.find(
+        (c) => !passports.some((p) => normalizeIso2(p.countryCode) === c.code) && c.code !== code
+      );
+      if (next) setSelectedCode(next.code);
     } catch (e: any) {
-      toast.err(e?.message ?? "Erreur lors de l'ajout");
+      const msg = e?.message ?? "Erreur lors de l'ajout";
+      // Show inline for duplicate/conflict errors, toast for unexpected errors
+      if (msg.toLowerCase().includes("exist") || msg.toLowerCase().includes("déjà") || msg.toLowerCase().includes("conflict")) {
+        setAddError("Ce passeport est déjà dans ta liste.");
+      } else {
+        toast.err(msg);
+      }
     } finally {
       setAdding(false);
     }
@@ -481,31 +522,59 @@ export default function ProfilePage() {
             </p>
 
             {/* Add passport */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-400">
-                  Nationalité du passeport
-                </label>
-                <PassportCombobox
-                  countries={countries}
-                  value={selectedCode}
-                  onChange={setSelectedCode}
-                />
-              </div>
-              <button
-                onClick={addPassport}
-                disabled={adding || !selectedCode}
-                className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition sm:self-auto self-stretch"
-              >
-                {adding ? (
-                  <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> Ajout…</>
-                ) : (
-                  <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg> Ajouter</>
-                )}
-              </button>
-            </div>
+            {(() => {
+              const isDuplicate = !!selectedCode &&
+                passports.some((p) => normalizeIso2(p.countryCode) === normalizeIso2(selectedCode));
+              return (
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                    <div className="flex-1">
+                      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-400">
+                        Nationalité du passeport
+                      </label>
+                      <PassportCombobox
+                        countries={countries}
+                        value={selectedCode}
+                        onChange={(code) => { setSelectedCode(code); setAddError(null); }}
+                      />
+                    </div>
+                    <button
+                      onClick={addPassport}
+                      disabled={adding || !selectedCode || isDuplicate}
+                      className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition sm:self-auto self-stretch"
+                    >
+                      {adding ? (
+                        <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> Ajout…</>
+                      ) : isDuplicate ? (
+                        <>✓ Déjà dans ta liste</>
+                      ) : (
+                        <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg> Ajouter</>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Inline duplicate banner */}
+                  {isDuplicate && (
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                      <span className="text-base leading-none">⚠️</span>
+                      <p className="text-xs font-medium text-amber-700">
+                        {flagEmoji(selectedCode)} {countryName(selectedCode)} est déjà dans ta liste de passeports.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Server/other error banner */}
+                  {addError && !isDuplicate && (
+                    <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                      <span className="text-base leading-none">❌</span>
+                      <p className="text-xs font-medium text-red-700">{addError}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Passport list */}
             {passports.length === 0 ? (
@@ -516,25 +585,44 @@ export default function ProfilePage() {
               </div>
             ) : (
               <ul className="mt-5 space-y-2">
-                {passports.map((p) => (
-                  <li key={p.id}
-                    className="flex items-center gap-4 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5">
-                    <span className="text-2xl leading-none">{flagEmoji(p.countryCode)}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900">{countryName(p.countryCode)}</p>
-                      <p className="text-xs text-gray-400">Ajouté le {fmtDate(p.createdAt)}</p>
-                    </div>
-                    <button
-                      onClick={() => setConfirmCode(p.countryCode)}
-                      className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 transition"
+                {passports.map((p) => {
+                  const isSelected = normalizeIso2(selectedCode) === normalizeIso2(p.countryCode);
+                  return (
+                    <li
+                      key={p.id}
+                      onClick={() => { setSelectedCode(p.countryCode); setAddError(null); }}
+                      className={`group flex cursor-pointer items-center gap-4 rounded-2xl border px-4 py-3.5 transition-all ${
+                        isSelected
+                          ? "border-indigo-300 bg-indigo-50 shadow-sm"
+                          : "border-gray-100 bg-gray-50 hover:border-indigo-200 hover:bg-white"
+                      }`}
                     >
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                      Supprimer
-                    </button>
-                  </li>
-                ))}
+                      <span className="text-2xl leading-none">{flagEmoji(p.countryCode)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className={`font-semibold ${isSelected ? "text-indigo-700" : "text-gray-900"}`}>
+                            {countryName(p.countryCode)}
+                          </p>
+                          {isSelected && (
+                            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
+                              Sélectionné
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400">Ajouté le {fmtDate(p.createdAt)}</p>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmCode(p.countryCode); }}
+                        className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Supprimer
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </SectionCard>
