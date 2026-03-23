@@ -9,25 +9,6 @@ import { useLang } from "../../lib/i18n";
 
 type Role = "STUDENT" | "UNIVERSITY";
 
-const ROLES = [
-  {
-    value: "STUDENT" as Role,
-    icon: "🎓",
-    title: "Étudiant",
-    desc: "Je prépare une mobilité à l'étranger",
-    color: "border-indigo-500 bg-indigo-50",
-    textColor: "text-indigo-700",
-  },
-  {
-    value: "UNIVERSITY" as Role,
-    icon: "🏛️",
-    title: "Université",
-    desc: "Je gère des étudiants en mobilité",
-    color: "border-violet-500 bg-violet-50",
-    textColor: "text-violet-700",
-  },
-];
-
 export default function RegisterPage() {
   const router = useRouter();
   const { t } = useLang();

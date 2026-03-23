@@ -144,6 +144,13 @@ export default function StudentDashboardPage() {
   const [uploadState, setUploadState] = useState<Record<string, string>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // Docs filter & sort
+  const [docFilter, setDocFilter] = useState<"all"|"expired"|"expiring"|"valid">("all");
+  const [docSort,   setDocSort]   = useState<"date"|"title">("date");
+
+  // Checklist / Timeline tab
+  const [checklistTab, setChecklistTab] = useState<"checklist"|"timeline">("checklist");
+
   // ── Auth fetch ──
   function authFetch(path: string, init?: RequestInit) {
     const token = localStorage.getItem("token");
@@ -207,7 +214,7 @@ export default function StudentDashboardPage() {
   // ── Save project ──
   async function saveProject() {
     if (!projForm.destinationCountry || !projForm.startDate || !projForm.endDate) {
-      setProjError("Tous les champs sont obligatoires.");
+      setProjError(t.student.required);
       return;
     }
     setSavingProj(true);
@@ -229,7 +236,7 @@ export default function StudentDashboardPage() {
 
   // ── Delete project ──
   async function deleteProject() {
-    if (!confirm("Supprimer ce projet de mobilité ?")) return;
+    if (!confirm(t.student.confirmDelete)) return;
     await authFetch("/api/v1/projects/active", { method: "DELETE" }).catch(() => {});
     setProject(null);
   }
@@ -254,7 +261,7 @@ export default function StudentDashboardPage() {
 
   // ── Delete document ──
   async function deleteDocument(id: string) {
-    if (!confirm("Supprimer ce document ?")) return;
+    if (!confirm(t.student.deleteDocConfirm)) return;
     setDocuments((prev) => prev.filter((d) => d.id !== id));
     authFetch(`/api/v1/documents/${id}`, { method: "DELETE" }).catch(() => {});
   }
@@ -283,10 +290,30 @@ export default function StudentDashboardPage() {
 
   // ── Remove file ──
   async function removeFile(docId: string) {
-    if (!confirm("Supprimer le fichier PDF joint ?")) return;
+    if (!confirm(t.student.deleteFileConfirm)) return;
     try {
       await authFetch(`/api/v1/documents/${docId}/file`, { method: "DELETE" });
       setDocuments((prev) => prev.map((d) => d.id === docId ? { ...d, fileName: null, fileMime: null, fileSize: null } : d));
+    } catch { /* ignore */ }
+  }
+
+  // ── Download file ──
+  async function downloadFile(docId: string, fileName: string) {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/v1/documents/${docId}/file`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch { /* ignore */ }
   }
 
@@ -311,13 +338,24 @@ export default function StudentDashboardPage() {
   );
   const summary = useMemo(() => summarise(checklist), [checklist]);
 
+  // ── Filtered & sorted documents ──
+  const filteredDocs = useMemo(() => {
+    let docs = [...documents];
+    if      (docFilter === "expired")  docs = docs.filter((d) => isExpired(d.expiresAt));
+    else if (docFilter === "expiring") docs = docs.filter((d) => isExpiringSoon(d.expiresAt));
+    else if (docFilter === "valid")    docs = docs.filter((d) => !isExpired(d.expiresAt) && !isExpiringSoon(d.expiresAt));
+    if (docSort === "title") docs.sort((a, b) => a.title.localeCompare(b.title));
+    else docs.sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
+    return docs;
+  }, [documents, docFilter, docSort]);
+
   // ─── Loading / Error ──────────────────────────────────────────────────────
 
   if (loading) return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center space-y-3">
         <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
-        <p className="text-sm text-gray-500">Chargement de ton dashboard…</p>
+        <p className="text-sm text-gray-500">{t.common.loading}</p>
       </div>
     </div>
   );
@@ -328,7 +366,7 @@ export default function StudentDashboardPage() {
         <p className="text-red-700">{error}</p>
         <button onClick={() => router.replace("/login")}
           className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm text-white hover:opacity-90">
-          Reconnexion
+          {t.nav.login}
         </button>
       </div>
     </div>
@@ -396,7 +434,7 @@ export default function StudentDashboardPage() {
       <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${nextStep.color} p-6 text-white shadow-lg`}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-white/70">Prochaine étape</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-white/70">{t.student.nextStep}</p>
             <h2 className="mt-1 text-xl font-bold">{nextStep.icon} {nextStep.title}</h2>
             <p className="mt-1 text-sm text-white/80">{nextStep.desc}</p>
           </div>
@@ -421,7 +459,7 @@ export default function StudentDashboardPage() {
 
       {/* ── Checklist intelligente ── */}
       <section>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-lg font-bold">{t.student.myChecklist}</h2>
             {checklist.length > 0 && passports.length > 0 && (
@@ -430,16 +468,31 @@ export default function StudentDashboardPage() {
               </p>
             )}
           </div>
-          {checklist.length > 0 && (
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              summary.score === 100 ? "bg-emerald-100 text-emerald-700" :
-              summary.overdue > 0  ? "bg-red-100 text-red-700" :
-              summary.critical > 0 ? "bg-orange-100 text-orange-700" :
-              "bg-gray-100 text-gray-600"
-            }`}>
-              {summary.done}/{summary.total} · {summary.score}%
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+            {checklist.length > 0 && (
+              <>
+                {/* Tab toggle */}
+                <div className="flex rounded-xl border bg-gray-50 p-0.5 text-xs font-medium">
+                  <button onClick={() => setChecklistTab("checklist")}
+                    className={`rounded-lg px-3 py-1.5 transition ${checklistTab === "checklist" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                    📋 {t.student.checklist}
+                  </button>
+                  <button onClick={() => setChecklistTab("timeline")}
+                    className={`rounded-lg px-3 py-1.5 transition ${checklistTab === "timeline" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                    📅 {t.student.timeline}
+                  </button>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  summary.score === 100 ? "bg-emerald-100 text-emerald-700" :
+                  summary.overdue > 0  ? "bg-red-100 text-red-700" :
+                  summary.critical > 0 ? "bg-orange-100 text-orange-700" :
+                  "bg-gray-100 text-gray-600"
+                }`}>
+                  {summary.done}/{summary.total} · {summary.score}%
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Score bar */}
@@ -469,7 +522,7 @@ export default function StudentDashboardPage() {
               : <Link href="/profile" className="mt-4 inline-block rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">{t.student.goProfile}</Link>
             }
           </div>
-        ) : (
+        ) : checklistTab === "checklist" ? (
           <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
             {checklist.map((item, i) => (
               <ChecklistRow
@@ -480,18 +533,51 @@ export default function StudentDashboardPage() {
               />
             ))}
           </div>
+        ) : (
+          /* Timeline view */
+          <TimelineView checklist={checklist} documents={documents} lang={lang} />
         )}
       </section>
 
       {/* ── Mes documents ── */}
       <section>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">{t.student.myDocs}</h2>
           <button onClick={() => setShowAddDoc(true)}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition">
             {t.student.addDoc}
           </button>
         </div>
+
+        {documents.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {/* Filter pills */}
+            <div className="flex rounded-xl border bg-gray-50 p-0.5 text-xs font-medium">
+              {([
+                { key: "all",      label: t.student.filterAll      },
+                { key: "expired",  label: t.student.filterExpired  },
+                { key: "expiring", label: t.student.filterExpiring },
+                { key: "valid",    label: t.student.filterValid    },
+              ] as { key: "all"|"expired"|"expiring"|"valid"; label: string }[]).map((f) => (
+                <button key={f.key} onClick={() => setDocFilter(f.key)}
+                  className={`rounded-lg px-3 py-1.5 transition ${docFilter === f.key ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {/* Sort */}
+            <div className="flex rounded-xl border bg-gray-50 p-0.5 text-xs font-medium">
+              <button onClick={() => setDocSort("date")}
+                className={`rounded-lg px-3 py-1.5 transition ${docSort === "date" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                📅 {t.student.sortDate}
+              </button>
+              <button onClick={() => setDocSort("title")}
+                className={`rounded-lg px-3 py-1.5 transition ${docSort === "title" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+                🔤 {t.student.sortTitle}
+              </button>
+            </div>
+          </div>
+        )}
 
         {documents.length === 0 ? (
           <div className="rounded-2xl border border-dashed bg-gray-50 px-6 py-12 text-center">
@@ -502,14 +588,20 @@ export default function StudentDashboardPage() {
               {t.student.addFirst}
             </button>
           </div>
+        ) : filteredDocs.length === 0 ? (
+          <div className="rounded-2xl border border-dashed bg-gray-50 px-6 py-10 text-center">
+            <p className="text-2xl">🔍</p>
+            <p className="mt-2 text-sm text-gray-500">{t.student.noDocsFilter}</p>
+          </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
-            {documents.map((doc) => (
+            {filteredDocs.map((doc) => (
               <DocCard key={doc.id} doc={doc}
                 uploadStatus={uploadState[doc.id]}
                 fileInputRef={(el) => { fileInputRefs.current[doc.id] = el; }}
                 onFileChange={(file) => uploadFile(doc.id, file)}
                 onRemoveFile={() => removeFile(doc.id)}
+                onDownload={() => downloadFile(doc.id, doc.fileName!)}
                 onDelete={() => deleteDocument(doc.id)}
               />
             ))}
@@ -571,7 +663,7 @@ export default function StudentDashboardPage() {
                 </div>
               )}
               {projForm.destinationCountry && (
-                <p className="mt-1.5 text-xs text-emerald-600 font-medium">✓ {projForm.destinationCountry} sélectionné</p>
+                <p className="mt-1.5 text-xs text-emerald-600 font-medium">{t.student.destSelected} {projForm.destinationCountry} {t.student.destSelectedSuffix}</p>
               )}
             </div>
 
@@ -712,15 +804,15 @@ function StatCard({ icon, label, value, sub, color, iconBg }: { icon: string; la
   );
 }
 
-// ── Urgency config ────────────────────────────────────────────────────────────
+// ── Urgency config (labels injected by ChecklistRow) ─────────────────────────
 
-const URGENCY_CONFIG = {
-  overdue:     { bar: "bg-red-500",    badge: "bg-red-100 text-red-700",       dot: "bg-red-500",    label: "Dépassé"     },
-  critical:    { bar: "bg-orange-500", badge: "bg-orange-100 text-orange-700", dot: "bg-orange-500", label: "Urgent"      },
-  soon:        { bar: "bg-amber-500",  badge: "bg-amber-100 text-amber-700",   dot: "bg-amber-500",  label: "Bientôt"     },
-  upcoming:    { bar: "bg-indigo-400", badge: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-400", label: "À venir"     },
-  future:      { bar: "bg-gray-300",   badge: "bg-gray-100 text-gray-500",     dot: "bg-gray-300",   label: "Plus tard"   },
-  post_arrival:{ bar: "bg-violet-400", badge: "bg-violet-100 text-violet-700", dot: "bg-violet-400", label: "Post-arrivée"},
+const URGENCY_STYLES = {
+  overdue:     { bar: "bg-red-500",    badge: "bg-red-100 text-red-700",       dot: "bg-red-500"    },
+  critical:    { bar: "bg-orange-500", badge: "bg-orange-100 text-orange-700", dot: "bg-orange-500" },
+  soon:        { bar: "bg-amber-500",  badge: "bg-amber-100 text-amber-700",   dot: "bg-amber-500"  },
+  upcoming:    { bar: "bg-indigo-400", badge: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-400" },
+  future:      { bar: "bg-gray-300",   badge: "bg-gray-100 text-gray-500",     dot: "bg-gray-300"   },
+  post_arrival:{ bar: "bg-violet-400", badge: "bg-violet-100 text-violet-700", dot: "bg-violet-400" },
 } as const;
 
 function ChecklistRow({ item, isLast, onAddDoc }: {
@@ -728,16 +820,26 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
   isLast: boolean;
   onAddDoc: () => void;
 }) {
-  const cfg  = URGENCY_CONFIG[item.urgency];
-  const done = item.status === "done";
+  const { t } = useLang();
+  const cfg   = URGENCY_STYLES[item.urgency];
+  const done  = item.status === "done";
+
+  const urgencyLabel: Record<string, string> = {
+    overdue:     t.student.urgencyOverdue,
+    critical:    t.student.urgencyCritical,
+    soon:        t.student.urgencySoon,
+    upcoming:    t.student.urgencyUpcoming,
+    future:      t.student.urgencyFuture,
+    post_arrival:t.student.urgencyPostArr,
+  };
 
   return (
-    <div className={`flex items-start gap-4 px-5 py-4 ${!isLast ? "border-b" : ""} ${done ? "opacity-60" : ""}`}>
+    <div className={`flex items-start gap-3 sm:gap-4 px-4 sm:px-5 py-4 ${!isLast ? "border-b" : ""} ${done ? "opacity-60" : ""}`}>
       {/* Left accent bar */}
-      <div className={`mt-1 h-full w-1 self-stretch rounded-full ${done ? "bg-emerald-400" : cfg.bar}`} style={{ minHeight: 36 }} />
+      <div className={`mt-1 h-full w-1 shrink-0 self-stretch rounded-full ${done ? "bg-emerald-400" : cfg.bar}`} style={{ minHeight: 36 }} />
 
       {/* Icon */}
-      <span className="mt-0.5 text-xl leading-none">{item.icon}</span>
+      <span className="mt-0.5 text-xl leading-none shrink-0">{item.icon}</span>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
@@ -745,15 +847,14 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
           <p className={`font-semibold text-sm ${done ? "line-through text-gray-400" : "text-gray-900"}`}>
             {item.label}
           </p>
-          {/* Priority */}
           {item.priority === "required" && !done && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">Obligatoire</span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">{t.student.required}</span>
           )}
           {item.priority === "recommended" && !done && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-500">Recommandé</span>
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-500">{t.student.recommended}</span>
           )}
           {done && (
-            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">✓ Fait</span>
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">{t.student.doneBadge}</span>
           )}
         </div>
         <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{item.description}</p>
@@ -765,11 +866,11 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
       {/* Right: deadline + urgency */}
       <div className="shrink-0 text-right">
         {done ? (
-          <span className="text-xs text-emerald-600">✓ Complété</span>
+          <span className="text-xs text-emerald-600">{t.student.completedBadge}</span>
         ) : (
           <>
             <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${cfg.badge}`}>
-              {cfg.label}
+              {urgencyLabel[item.urgency] ?? item.urgency}
             </span>
             <p className="mt-1 text-[11px] text-gray-400">{item.deadlineLabel}</p>
           </>
@@ -779,9 +880,79 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
             onClick={onAddDoc}
             className="mt-1.5 block text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline"
           >
-            + Ajouter →
+            {t.student.addLink}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Timeline view ─────────────────────────────────────────────────────────────
+
+function TimelineView({ checklist, documents, lang }: { checklist: ChecklistItem[]; documents: Document[]; lang: string }) {
+  const { t } = useLang();
+
+  // Build timeline events from checklist items + document expiry dates
+  type Event = { date: string; label: string; icon: string; badge: string; badgeText: string };
+  const events: Event[] = [];
+
+  // Checklist deadlines (items that have a deadline label but are not "done")
+  for (const item of checklist) {
+    if (item.status === "done") continue;
+    const cfg = URGENCY_STYLES[item.urgency];
+    events.push({
+      date: item.deadlineLabel || "",
+      label: item.label,
+      icon: item.icon,
+      badge: cfg.badge,
+      badgeText: {
+        overdue: t.student.urgencyOverdue,
+        critical: t.student.urgencyCritical,
+        soon: t.student.urgencySoon,
+        upcoming: t.student.urgencyUpcoming,
+        future: t.student.urgencyFuture,
+        post_arrival: t.student.urgencyPostArr,
+      }[item.urgency] ?? item.urgency,
+    });
+  }
+
+  // Document expiry dates
+  for (const doc of documents) {
+    if (!doc.expiresAt) continue;
+    const expired  = isExpired(doc.expiresAt);
+    const expiring = isExpiringSoon(doc.expiresAt);
+    events.push({
+      date: fmtDate(doc.expiresAt, lang === "en" ? "en-GB" : "fr-FR"),
+      label: doc.title,
+      icon: "📄",
+      badge: expired ? "bg-red-100 text-red-700" : expiring ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500",
+      badgeText: expired ? t.student.expired : expiring ? t.student.expiringSoon : t.student.valid,
+    });
+  }
+
+  if (events.length === 0) return (
+    <div className="rounded-2xl border border-dashed bg-gray-50 px-6 py-10 text-center">
+      <p className="text-2xl">📅</p>
+      <p className="mt-2 text-sm text-gray-500">{t.student.noDocsFilter}</p>
+    </div>
+  );
+
+  return (
+    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+      <div className="divide-y">
+        {events.map((ev, i) => (
+          <div key={i} className="flex items-center gap-4 px-5 py-3">
+            <span className="text-lg shrink-0">{ev.icon}</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{ev.label}</p>
+              <p className="text-xs text-gray-400">{ev.date}</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${ev.badge}`}>
+              {ev.badgeText}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -793,14 +964,16 @@ function StatusBadge({ status }: { status: "ok" | "warn" | "missing" }) {
   return <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400" />Manquant</span>;
 }
 
-function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, onDelete }: {
+function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, onDownload, onDelete }: {
   doc: Document;
   uploadStatus?: string;
   fileInputRef: (el: HTMLInputElement | null) => void;
   onFileChange: (file: File) => void;
   onRemoveFile: () => void;
+  onDownload:   () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLang();
   const expired  = isExpired(doc.expiresAt);
   const expiring = isExpiringSoon(doc.expiresAt);
   const isUploading = uploadStatus === "uploading";
@@ -821,7 +994,7 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
 
       {/* Expiry */}
       <p className={`mt-3 text-xs font-medium ${expired ? "text-red-600" : expiring ? "text-amber-600" : "text-gray-400"}`}>
-        {expired ? "⚠️ Expiré" : expiring ? "⏳ Expire bientôt" : "✓ Valide"} · {fmtDate(doc.expiresAt)}
+        {expired ? t.student.expired : expiring ? t.student.expiringSoon : t.student.valid} · {fmtDate(doc.expiresAt)}
       </p>
 
       {/* File section */}
@@ -835,10 +1008,16 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
                 {doc.fileSize && <p className="text-xs text-gray-400">{fmtBytes(doc.fileSize)}</p>}
               </div>
             </div>
-            <button onClick={onRemoveFile}
-              className="shrink-0 rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:border-red-200 hover:text-red-500 transition">
-              Retirer
-            </button>
+            <div className="flex shrink-0 gap-1">
+              <button onClick={onDownload}
+                className="rounded-lg border border-indigo-200 px-2 py-1 text-xs text-indigo-600 hover:bg-indigo-50 transition">
+                {t.student.downloadPdf}
+              </button>
+              <button onClick={onRemoveFile}
+                className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-gray-500 hover:border-red-200 hover:text-red-500 transition">
+                {t.student.removeFile}
+              </button>
+            </div>
           </div>
         ) : (
           <div>
@@ -849,10 +1028,10 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
               disabled={isUploading}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-2 text-xs font-medium text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 transition">
               {isUploading ? (
-                <><span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" /> Upload en cours…</>
-              ) : <>📎 Joindre un PDF</>}
+                <><span className="h-3 w-3 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />{t.student.uploadingFile}</>
+              ) : <>{t.student.attachPdf}</>}
             </button>
-            {uploadStatus === "error" && <p className="mt-1 text-xs text-red-500">Échec de l'upload, réessaie.</p>}
+            {uploadStatus === "error" && <p className="mt-1 text-xs text-red-500">{t.student.uploadError}</p>}
           </div>
         )}
       </div>

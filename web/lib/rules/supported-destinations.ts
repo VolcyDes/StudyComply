@@ -5,7 +5,7 @@
  * Other destinations will be added in future phases.
  */
 
-export type DestinationZone = "SCHENGEN_EU" | "USA" | "CANADA";
+export type DestinationZone = "SCHENGEN_EU" | "USA" | "CANADA" | "UK" | "JAPAN" | "AUSTRALIA";
 
 /** Maps an ISO-2 destination country code to its zone. */
 const DESTINATION_ZONES: Record<string, DestinationZone> = {
@@ -45,6 +45,10 @@ const DESTINATION_ZONES: Record<string, DestinationZone> = {
   // ── Amérique du Nord ──────────────────────────────────────────────────────
   US: "USA",
   CA: "CANADA",
+  // ── Autres destinations ──────────────────────────────────────────────────
+  GB: "UK",
+  JP: "JAPAN",
+  AU: "AUSTRALIA",
 };
 
 /** Returns the destination zone for a country code, or null if not supported. */
@@ -64,5 +68,13 @@ export const DESTINATION_GROUPS = [
   {
     label: "🌎 Amérique du Nord",
     codes: ["CA","US"],
+  },
+  {
+    label: "🇬🇧 Royaume-Uni",
+    codes: ["GB"] as const,
+  },
+  {
+    label: "🌏 Asie-Pacifique",
+    codes: ["JP","AU"] as const,
   },
 ] as const;

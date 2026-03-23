@@ -56,7 +56,7 @@ const COMMON: RequirementDef[] = [
     daysBeforeDeparture: -90,
     priority: "required",
     tiers: ["EU_EEA", "NON_EU"],
-    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA", "UK", "JAPAN", "AUSTRALIA"],
   },
   {
     id: "transcripts",
@@ -67,7 +67,7 @@ const COMMON: RequirementDef[] = [
     daysBeforeDeparture: -90,
     priority: "recommended",
     tiers: ["EU_EEA", "NON_EU"],
-    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA", "UK", "JAPAN", "AUSTRALIA"],
   },
   {
     id: "accommodation_proof",
@@ -78,7 +78,7 @@ const COMMON: RequirementDef[] = [
     daysBeforeDeparture: -45,
     priority: "required",
     tiers: ["EU_EEA", "NON_EU"],
-    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA", "UK", "JAPAN", "AUSTRALIA"],
   },
   {
     id: "bank_account_local",
@@ -89,7 +89,7 @@ const COMMON: RequirementDef[] = [
     daysBeforeDeparture: 30,
     priority: "recommended",
     tiers: ["EU_EEA", "NON_EU"],
-    destinations: ["SCHENGEN_EU", "USA", "CANADA"],
+    destinations: ["SCHENGEN_EU", "USA", "CANADA", "UK", "JAPAN", "AUSTRALIA"],
   },
 ];
 
@@ -526,6 +526,207 @@ const CANADA_ALL: RequirementDef[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// UK — all tiers (post-Brexit, EU and non-EU students follow the same route)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const UK_ALL: RequirementDef[] = [
+  {
+    id: "uk_cas",
+    type: "acceptance",
+    label: "Confirmation of Acceptance for Studies (CAS)",
+    description: "Ton université doit t'attribuer un numéro CAS avant que tu puisses demander ton visa étudiant. C'est le document de base de toute candidature.",
+    icon: "🎓",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["UK"],
+    link: "https://www.gov.uk/student-visa",
+    linkLabel: "Visa étudiant UK – GOV.UK",
+  },
+  {
+    id: "uk_student_visa",
+    type: "visa",
+    label: "Visa étudiant UK (Student Visa)",
+    description: "Depuis le Brexit, tous les étudiants étrangers (EU inclus) doivent obtenir un Student Visa pour étudier plus de 6 mois au Royaume-Uni. Demande via UKVI.",
+    icon: "📋",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["UK"],
+    link: "https://www.gov.uk/student-visa/apply",
+    linkLabel: "Demander le visa – GOV.UK",
+  },
+  {
+    id: "uk_english_test",
+    type: "other",
+    label: "Test d'anglais (IELTS / TOEFL / PTE)",
+    description: "La plupart des universités britanniques exigent un score IELTS Academic ≥ 6.0 (ou équivalent) pour valider ton admission et ton visa.",
+    icon: "📝",
+    daysBeforeDeparture: -120,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["UK"],
+    link: "https://www.ielts.org/",
+    linkLabel: "Passer l'IELTS",
+  },
+  {
+    id: "uk_ihs",
+    type: "insurance",
+    label: "Surcharge santé (Immigration Health Surcharge)",
+    description: "Frais obligatoires à payer lors de la demande de visa. Environ £776/an. Te donne accès au NHS (National Health Service).",
+    icon: "🏥",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["UK"],
+    link: "https://www.gov.uk/healthcare-immigration-application",
+    linkLabel: "Payer l'IHS – GOV.UK",
+  },
+  {
+    id: "uk_brp",
+    type: "residence_permit",
+    label: "Biometric Residence Permit (BRP)",
+    description: "À collecter dans les 10 jours suivant ton arrivée au Royaume-Uni. Indispensable pour justifier de ton statut de résident.",
+    icon: "📇",
+    daysBeforeDeparture: 10,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["UK"],
+    link: "https://www.gov.uk/biometric-residence-permits",
+    linkLabel: "BRP – GOV.UK",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JAPAN — all tiers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const JAPAN_ALL: RequirementDef[] = [
+  {
+    id: "jp_coe",
+    type: "acceptance",
+    label: "Certificate of Eligibility (COE)",
+    description: "L'université japonaise doit demander le COE au bureau d'immigration japonais en ton nom. Ce document est nécessaire pour obtenir le visa étudiant.",
+    icon: "🎓",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["JAPAN"],
+    link: "https://www.moj.go.jp/isa/applications/procedures/zairyu_shikaku20.html",
+    linkLabel: "COE – Bureau de l'immigration JP",
+  },
+  {
+    id: "jp_student_visa",
+    type: "visa",
+    label: "Visa étudiant Japon (College Student Visa)",
+    description: "Visa à demander auprès du consulat japonais de ton pays avec le COE. Obligatoire pour les séjours d'études supérieurs à 90 jours.",
+    icon: "📋",
+    daysBeforeDeparture: -60,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["JAPAN"],
+    link: "https://www.mofa.go.jp/j_info/visit/visa/long/visa6.html",
+    linkLabel: "Visa étudiant – MOFA Japon",
+  },
+  {
+    id: "jp_residence_card",
+    type: "residence_permit",
+    label: "Carte de résidence (Zairyu Card)",
+    description: "Délivrée automatiquement à l'aéroport à ton arrivée. Conserve-la, elle est demandée pour l'ouverture de compte bancaire, location, etc.",
+    icon: "📇",
+    daysBeforeDeparture: 1,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["JAPAN"],
+  },
+  {
+    id: "jp_national_health",
+    type: "insurance",
+    label: "Assurance maladie nationale (Kokumin Kenko Hoken)",
+    description: "Inscription obligatoire à l'assurance maladie nationale japonaise dans les 14 jours suivant l'inscription en mairie.",
+    icon: "🏥",
+    daysBeforeDeparture: 14,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["JAPAN"],
+    link: "https://www.mhlw.go.jp/english/policy/health-medical/health-insurance/index.html",
+    linkLabel: "Assurance maladie JP",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUSTRALIA — all tiers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AUSTRALIA_ALL: RequirementDef[] = [
+  {
+    id: "au_coe",
+    type: "acceptance",
+    label: "Confirmation of Enrolment (CoE)",
+    description: "Document émis par ton université australienne après paiement des frais d'inscription. Requis pour la demande de visa étudiant.",
+    icon: "🎓",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["AUSTRALIA"],
+    link: "https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/student-500",
+    linkLabel: "Visa étudiant Australie (Subclass 500)",
+  },
+  {
+    id: "au_student_visa",
+    type: "visa",
+    label: "Visa étudiant Australie (Subclass 500)",
+    description: "Visa obligatoire pour tous les étudiants étrangers souhaitant étudier plus de 3 mois en Australie. Demande en ligne via ImmiAccount.",
+    icon: "📋",
+    daysBeforeDeparture: -90,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["AUSTRALIA"],
+    link: "https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing/student-500/student",
+    linkLabel: "Demander le Subclass 500",
+  },
+  {
+    id: "au_english_test",
+    type: "other",
+    label: "Test d'anglais (IELTS / TOEFL / PTE Academic)",
+    description: "Score minimum requis selon le niveau d'études. IELTS Academic ≥ 5.5 pour la plupart des programmes de premier cycle.",
+    icon: "📝",
+    daysBeforeDeparture: -120,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["AUSTRALIA"],
+    link: "https://www.ielts.org/",
+    linkLabel: "Passer l'IELTS",
+  },
+  {
+    id: "au_oshc",
+    type: "insurance",
+    label: "Overseas Student Health Cover (OSHC)",
+    description: "Assurance maladie obligatoire pour tous les étudiants étrangers en Australie. Doit être souscrite avant l'arrivée et couvrir toute la durée du visa.",
+    icon: "🏥",
+    daysBeforeDeparture: -60,
+    priority: "required",
+    tiers: ["EU_EEA", "NON_EU"],
+    destinations: ["AUSTRALIA"],
+    link: "https://www.privatehealth.gov.au/dynamic/pbsearch?provstatus=C",
+    linkLabel: "Comparer les OSHC",
+  },
+  {
+    id: "au_biometrics",
+    type: "other",
+    label: "Données biométriques",
+    description: "Collecte d'empreintes digitales et photo au centre biométrique ou à l'aéroport. Requis pour la plupart des nationalités.",
+    icon: "🔍",
+    daysBeforeDeparture: -60,
+    priority: "required",
+    tiers: ["NON_EU"],
+    destinations: ["AUSTRALIA"],
+    link: "https://immi.homeaffairs.gov.au/help-support/meeting-our-requirements/biometrics",
+    linkLabel: "Biométrie – DHA Australie",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -535,4 +736,7 @@ export const ALL_REQUIREMENTS: RequirementDef[] = [
   ...SCHENGEN_NON_EU,
   ...USA_ALL,
   ...CANADA_ALL,
+  ...UK_ALL,
+  ...JAPAN_ALL,
+  ...AUSTRALIA_ALL,
 ];
