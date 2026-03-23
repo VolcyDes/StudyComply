@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../../lib/config";
 import { clearAuth } from "../../../lib/auth";
+import { buildChecklist, summarise } from "../../../lib/rules/engine";
+import type { ChecklistItem } from "../../../lib/rules/engine";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,17 +33,12 @@ const FLAGS: Record<string, string> = {
   LU:"🇱🇺",IS:"🇮🇸",EE:"🇪🇪",LV:"🇱🇻",LT:"🇱🇹",SK:"🇸🇰",SI:"🇸🇮",HR:"🇭🇷",
 };
 
-const REQUIRED_DOCS = [
-  { type: "passport",   label: "Passeport",             icon: "🛂" },
-  { type: "visa",       label: "Visa étudiant",          icon: "📋" },
-  { type: "insurance",  label: "Assurance santé",        icon: "🏥" },
-  { type: "acceptance", label: "Lettre d'acceptation",   icon: "🎓" },
-  { type: "transcript", label: "Relevés de notes",       icon: "📄" },
-];
-
 const DOC_TYPE_LABELS: Record<string, string> = {
   passport:"🛂 Passeport", visa:"📋 Visa", insurance:"🏥 Assurance",
-  acceptance:"🎓 Acceptation", transcript:"📄 Relevé", other:"📎 Autre",
+  acceptance:"🎓 Acceptation", transcript:"📄 Relevé", accommodation:"🏠 Logement",
+  funds:"💰 Ressources", photos:"📸 Photos", appointment:"📅 Rendez-vous",
+  residence_permit:"📇 Titre de séjour", bank:"🏦 Banque",
+  enrollment:"✏️ Inscription", registration:"🏛️ Enregistrement", other:"📎 Autre",
 };
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -315,9 +312,24 @@ export default function StudentDashboardPage() {
     </div>
   );
 
-  const nextStep       = computeNextStep(project, passports, documents);
-  const docsWithFile   = documents.filter((d) => d.fileName);
-  const checklistDone  = REQUIRED_DOCS.filter((r) => documents.some((d) => d.type === r.type && d.fileName)).length;
+  const nextStep     = computeNextStep(project, passports, documents);
+  const docsWithFile = documents.filter((d) => d.fileName);
+
+  // Smart checklist — personalised by passport tier × destination
+  const doneDocTypes = useMemo(
+    () => new Set(documents.filter((d) => d.fileName).map((d) => d.type)),
+    [documents],
+  );
+  const checklist = useMemo(
+    () => project && passports.length > 0
+      ? buildChecklist(
+          { passportCodes: passports.map((p) => p.countryCode), destinationCountry: project.destinationCountry, startDate: project.startDate, endDate: project.endDate },
+          doneDocTypes,
+        )
+      : [],
+    [project, passports, doneDocTypes],
+  );
+  const summary = useMemo(() => summarise(checklist), [checklist]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -368,9 +380,9 @@ export default function StudentDashboardPage() {
           value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${project.destinationCountry}` : "—"}
           sub={project ? `${fmtDate(project.startDate)} → ${fmtDate(project.endDate)}` : "Aucun projet"}
           color="bg-indigo-50 border-indigo-100" iconBg="bg-indigo-100" />
-        <StatCard icon="📄" label="Documents"
-          value={`${docsWithFile.length} déposé${docsWithFile.length > 1 ? "s" : ""}`}
-          sub={`${checklistDone}/${REQUIRED_DOCS.length} checklist complète`}
+        <StatCard icon="📄" label="Conformité"
+          value={checklist.length > 0 ? `${summary.score}%` : `${docsWithFile.length} déposé${docsWithFile.length > 1 ? "s" : ""}`}
+          sub={checklist.length > 0 ? `${summary.done}/${summary.total} requis complétés` : "Configure un projet"}
           color="bg-violet-50 border-violet-100" iconBg="bg-violet-100" />
         <StatCard icon="🛂" label="Passeports"
           value={passports.length === 0 ? "Aucun" : `${passports.length} passeport${passports.length > 1 ? "s" : ""}`}
@@ -405,35 +417,70 @@ export default function StudentDashboardPage() {
         </div>
       </div>
 
-      {/* ── Checklist ── */}
+      {/* ── Checklist intelligente ── */}
       <section>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Checklist documents</h2>
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-            {checklistDone}/{REQUIRED_DOCS.length} complétés
-          </span>
+          <div>
+            <h2 className="text-lg font-bold">Checklist personnalisée</h2>
+            {checklist.length > 0 && passports.length > 0 && (
+              <p className="text-xs text-gray-500 mt-0.5">
+                {passports.map(p => p.countryCode).join(", ")} → {project?.destinationCountry}
+              </p>
+            )}
+          </div>
+          {checklist.length > 0 && (
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+              summary.score === 100 ? "bg-emerald-100 text-emerald-700" :
+              summary.overdue > 0  ? "bg-red-100 text-red-700" :
+              summary.critical > 0 ? "bg-orange-100 text-orange-700" :
+              "bg-gray-100 text-gray-600"
+            }`}>
+              {summary.done}/{summary.total} · {summary.score}%
+            </span>
+          )}
         </div>
-        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-          {REQUIRED_DOCS.map((item, i) => {
-            const matched  = documents.find((d) => d.type === item.type && d.fileName);
-            const noFile   = documents.find((d) => d.type === item.type && !d.fileName);
-            const status   = matched ? (isExpiringSoon(matched.expiresAt) || isExpired(matched.expiresAt) ? "warn" : "ok") : noFile ? "warn" : "missing";
-            return (
-              <div key={item.type} className={`flex items-center justify-between gap-4 px-5 py-4 ${i < REQUIRED_DOCS.length - 1 ? "border-b" : ""}`}>
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">{item.icon}</span>
-                  <div>
-                    <p className="font-medium text-gray-900">{item.label}</p>
-                    {matched && <p className="text-xs text-gray-500">{isExpired(matched.expiresAt) ? `⚠️ Expiré le ${fmtDate(matched.expiresAt)}` : `Expire le ${fmtDate(matched.expiresAt)}`}</p>}
-                    {noFile && !matched && <p className="text-xs text-amber-600">Enregistré · fichier manquant</p>}
-                    {status === "missing" && !noFile && <p className="text-xs text-gray-400">Non ajouté</p>}
-                  </div>
-                </div>
-                <StatusBadge status={status} />
-              </div>
-            );
-          })}
-        </div>
+
+        {/* Score bar */}
+        {checklist.length > 0 && (
+          <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                summary.score === 100 ? "bg-emerald-500" :
+                summary.overdue > 0  ? "bg-red-500" :
+                summary.critical > 0 ? "bg-orange-500" : "bg-indigo-500"
+              }`}
+              style={{ width: `${summary.score}%` }}
+            />
+          </div>
+        )}
+
+        {/* No project or no passports */}
+        {checklist.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center">
+            <p className="text-3xl">📋</p>
+            <p className="mt-2 font-medium text-gray-700">Checklist non disponible</p>
+            <p className="mt-1 text-sm text-gray-500">
+              {!project
+                ? "Crée un projet de mobilité pour générer ta checklist personnalisée."
+                : "Ajoute ton passeport dans ton profil pour personnaliser la checklist."}
+            </p>
+            {!project
+              ? <button onClick={openProjectModal} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Créer un projet</button>
+              : <Link href="/profile" className="mt-4 inline-block rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">Ajouter un passeport</Link>
+            }
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+            {checklist.map((item, i) => (
+              <ChecklistRow
+                key={item.id}
+                item={item}
+                isLast={i === checklist.length - 1}
+                onAddDoc={() => setShowAddDoc(true)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Mes documents ── */}
@@ -580,8 +627,9 @@ export default function StudentDashboardPage() {
               <select className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
                 value={newDoc.type}
                 onChange={(e) => setNewDoc({ ...newDoc, type: e.target.value })}>
-                {REQUIRED_DOCS.map((d) => <option key={d.type} value={d.type}>{d.icon} {d.label}</option>)}
-                <option value="other">📎 Autre</option>
+                {Object.entries(DOC_TYPE_LABELS).map(([type, label]) => (
+                  <option key={type} value={type}>{label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -639,6 +687,81 @@ function StatCard({ icon, label, value, sub, color, iconBg }: { icon: string; la
       <p className="mt-3 text-xs font-medium uppercase tracking-wider text-gray-500">{label}</p>
       <p className="mt-1 text-xl font-bold text-gray-900">{value}</p>
       <p className="mt-1 text-xs text-gray-500">{sub}</p>
+    </div>
+  );
+}
+
+// ── Urgency config ────────────────────────────────────────────────────────────
+
+const URGENCY_CONFIG = {
+  overdue:     { bar: "bg-red-500",    badge: "bg-red-100 text-red-700",       dot: "bg-red-500",    label: "Dépassé"     },
+  critical:    { bar: "bg-orange-500", badge: "bg-orange-100 text-orange-700", dot: "bg-orange-500", label: "Urgent"      },
+  soon:        { bar: "bg-amber-500",  badge: "bg-amber-100 text-amber-700",   dot: "bg-amber-500",  label: "Bientôt"     },
+  upcoming:    { bar: "bg-indigo-400", badge: "bg-indigo-100 text-indigo-700", dot: "bg-indigo-400", label: "À venir"     },
+  future:      { bar: "bg-gray-300",   badge: "bg-gray-100 text-gray-500",     dot: "bg-gray-300",   label: "Plus tard"   },
+  post_arrival:{ bar: "bg-violet-400", badge: "bg-violet-100 text-violet-700", dot: "bg-violet-400", label: "Post-arrivée"},
+} as const;
+
+function ChecklistRow({ item, isLast, onAddDoc }: {
+  item: ChecklistItem;
+  isLast: boolean;
+  onAddDoc: () => void;
+}) {
+  const cfg  = URGENCY_CONFIG[item.urgency];
+  const done = item.status === "done";
+
+  return (
+    <div className={`flex items-start gap-4 px-5 py-4 ${!isLast ? "border-b" : ""} ${done ? "opacity-60" : ""}`}>
+      {/* Left accent bar */}
+      <div className={`mt-1 h-full w-1 self-stretch rounded-full ${done ? "bg-emerald-400" : cfg.bar}`} style={{ minHeight: 36 }} />
+
+      {/* Icon */}
+      <span className="mt-0.5 text-xl leading-none">{item.icon}</span>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className={`font-semibold text-sm ${done ? "line-through text-gray-400" : "text-gray-900"}`}>
+            {item.label}
+          </p>
+          {/* Priority */}
+          {item.priority === "required" && !done && (
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">Obligatoire</span>
+          )}
+          {item.priority === "recommended" && !done && (
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-500">Recommandé</span>
+          )}
+          {done && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">✓ Fait</span>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{item.description}</p>
+        {item.note && (
+          <p className="mt-1 text-xs text-amber-600 leading-relaxed">ℹ️ {item.note}</p>
+        )}
+      </div>
+
+      {/* Right: deadline + urgency */}
+      <div className="shrink-0 text-right">
+        {done ? (
+          <span className="text-xs text-emerald-600">✓ Complété</span>
+        ) : (
+          <>
+            <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${cfg.badge}`}>
+              {cfg.label}
+            </span>
+            <p className="mt-1 text-[11px] text-gray-400">{item.deadlineLabel}</p>
+          </>
+        )}
+        {!done && (
+          <button
+            onClick={onAddDoc}
+            className="mt-1.5 block text-[11px] text-indigo-500 hover:text-indigo-700 hover:underline"
+          >
+            + Ajouter →
+          </button>
+        )}
+      </div>
     </div>
   );
 }
