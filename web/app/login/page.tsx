@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
+import { setRole, getRole } from "../../lib/auth";
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -28,7 +30,14 @@ export default function LoginPage() {
       const data = await res.json();
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
-      // Always go through the routing hub — it reads the JWT role and redirects correctly
+      // Store role from API response — getRole() uses it as source of truth
+      if (data?.user?.role) setRole(data.user.role);
+      else {
+        // Fallback: keep existing userRole if already set (e.g. previously registered)
+        // If truly unknown, getRole() will default to STUDENT in the hub
+        const existing = getRole();
+        if (existing) setRole(existing);
+      }
       router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Échec de connexion");

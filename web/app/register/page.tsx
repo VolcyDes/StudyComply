@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
+import { setRole } from "../../lib/auth";
 
 type Role = "STUDENT" | "UNIVERSITY";
 
@@ -51,8 +52,8 @@ export default function RegisterPage() {
       const data = await res.json();
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
-      // Use the role from the API response directly (or fall back to the form selection)
-      // Always go through the routing hub — it reads the JWT role and redirects correctly
+      // Store role explicitly — use API response role if available, otherwise form selection
+      setRole(data?.user?.role ?? role);
       router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? "Échec d'inscription");

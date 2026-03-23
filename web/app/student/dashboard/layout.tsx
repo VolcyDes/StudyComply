@@ -2,27 +2,17 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-function getRoleFromToken(): string | null {
-  try {
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return (payload?.role ?? "").toString().toUpperCase();
-  } catch {
-    return null;
-  }
-}
+import { hasToken, getRole } from "../../../lib/auth";
 
 export default function StudentDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const role = getRoleFromToken();
-    if (!role) {
+    if (!hasToken()) {
       router.replace("/login");
       return;
     }
+    const role = getRole();
     // Wrong role → routing hub decides where to go (no direct cross-redirect)
     if (role === "UNIVERSITY") {
       router.replace("/dashboard");
