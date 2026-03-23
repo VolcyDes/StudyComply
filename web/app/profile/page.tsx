@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "../../lib/config";
 import { clearAuth, getRole } from "../../lib/auth";
+import { ALL_COUNTRIES, type Country } from "../../lib/countries";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type User     = { id: string; email: string; role: string };
 type Passport = { id: string; countryCode: string; createdAt: string };
-type Country  = { code: string; name: string };
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
@@ -214,7 +214,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
 
   // Student-only state
-  const [countries,       setCountries]       = useState<Country[]>([]);
+  const countries = ALL_COUNTRIES; // full static list — no API call needed
   const [passports,       setPassports]       = useState<Passport[]>([]);
   const [selectedCode,    setSelectedCode]    = useState<string>("FR");
   const [adding,          setAdding]          = useState(false);
@@ -244,7 +244,7 @@ export default function ProfilePage() {
     if (stored) { try { setUser(JSON.parse(stored)); } catch { /* ignore */ } }
 
     if (r === "STUDENT") {
-      Promise.all([loadCountries(), loadPassports()]).finally(() => setLoading(false));
+      loadPassports().finally(() => setLoading(false));
     } else {
       // University: just load user info
       const token = localStorage.getItem("token");
@@ -257,19 +257,7 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Countries & Passports ───────────────────────────────────────────────────
-
-  async function loadCountries() {
-    try {
-      const res = await authFetch("/api/v1/meta/countries");
-      const raw = await res.text();
-      const data = raw ? JSON.parse(raw) : [];
-      const items: Country[] = Array.isArray(data) ? data : (data?.items ?? []);
-      setCountries(items);
-      if (items.find((c) => c.code === "FR")) setSelectedCode("FR");
-      else if (items[0]) setSelectedCode(items[0].code);
-    } catch { /* ignore */ }
-  }
+  // ── Passports ────────────────────────────────────────────────────────────────
 
   async function loadPassports() {
     try {
