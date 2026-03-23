@@ -53,6 +53,6 @@ web/Build/
 web/next/
 web/web@*
 
-# Temp API rules (WIP)
-api/src/rules/
+# Temp API rules (WIP) — now committed
+# api/src/rules/
 
