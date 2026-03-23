@@ -264,10 +264,19 @@ export default function ProfilePage() {
   async function loadPassports() {
     try {
       const res = await authFetch("/api/v1/passports");
-      const raw = await res.text();
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || `Erreur ${res.status}`);
+      }
+      const raw  = await res.text();
       const data = raw ? JSON.parse(raw) : [];
       setPassports(Array.isArray(data) ? data : (data?.items ?? []));
-    } catch { /* ignore */ }
+    } catch (e: any) {
+      // Only show a toast for non-auth errors (auth errors redirect to login)
+      if (e?.message !== "Unauthorized" && e?.message !== "No token") {
+        toast.err(`Erreur de chargement : ${e?.message ?? "inconnue"}`);
+      }
+    }
   }
 
   async function addPassport() {
@@ -284,10 +293,12 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ countryCode: code }),
       });
-      if (!res.ok) throw new Error(await res.text() || `Erreur ${res.status}`);
-      const raw     = await res.text();
-      const created: Passport = raw ? JSON.parse(raw) : { id: crypto.randomUUID?.() ?? "tmp", countryCode: code, createdAt: new Date().toISOString() };
-      setPassports((prev) => [created, ...prev]);
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || `Erreur ${res.status}`);
+      }
+      // Reload from server to guarantee the state matches the DB
+      await loadPassports();
       toast.ok("Passeport ajouté !");
     } catch (e: any) {
       toast.err(e?.message ?? "Erreur lors de l'ajout");
@@ -299,15 +310,21 @@ export default function ProfilePage() {
   async function confirmRemove() {
     if (!confirmCode) return;
     const code = normalizeIso2(confirmCode);
-    const prev = passports;
-    setPassports((p) => p.filter((x) => normalizeIso2(x.countryCode) !== code));
     setConfirmCode(null);
+    // Optimistic removal
+    setPassports((p) => p.filter((x) => normalizeIso2(x.countryCode) !== code));
     try {
       const res = await authFetch(`/api/v1/passports/${code}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text() || `Erreur ${res.status}`);
+      if (!res.ok) {
+        const msg = await res.text().catch(() => "");
+        throw new Error(msg || `Erreur ${res.status}`);
+      }
+      // Reload to confirm the DB state
+      await loadPassports();
       toast.ok("Passeport supprimé.");
     } catch (e: any) {
-      setPassports(prev);
+      // On error, reload to restore the real server state
+      await loadPassports();
       toast.err(e?.message ?? "Erreur lors de la suppression");
     }
   }
