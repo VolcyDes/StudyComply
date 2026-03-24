@@ -250,7 +250,8 @@ export default function ProfilePage() {
     const stored = localStorage.getItem("user");
     if (stored) { try { setUser(JSON.parse(stored)); } catch { /* ignore */ } }
 
-    if (r === "STUDENT") {
+    if (r !== "UNIVERSITY") {
+      // Student (or role not yet resolved) — load passports
       loadPassports().finally(() => setLoading(false));
 
       // Re-fetch when the user navigates back to this page (Next.js router cache
