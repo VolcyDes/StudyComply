@@ -27,8 +27,8 @@ function normalizeIso2(v: string) {
   return (m ? m[1] : s).toUpperCase();
 }
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+function fmtDate(iso: string, locale = "fr-FR") {
+  return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -56,6 +56,7 @@ function PassportCombobox({
   value: string;
   onChange: (code: string) => void;
 }) {
+  const { t } = useLang();
   const [query, setQuery]   = useState("");
   const [open, setOpen]     = useState(false);
 
@@ -83,7 +84,7 @@ function PassportCombobox({
             <span className="text-gray-400">({selected.code})</span>
           </span>
         ) : (
-          <span className="text-gray-400">Choisir un pays…</span>
+          <span className="text-gray-400">{t.profile.passChoosePlaceholder}</span>
         )}
         <svg className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -105,7 +106,7 @@ function PassportCombobox({
                 <input
                   autoFocus
                   className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
-                  placeholder="Rechercher un pays ou un code…"
+                  placeholder={t.profile.passSearchPlaceholder}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
@@ -121,7 +122,7 @@ function PassportCombobox({
             {/* List */}
             <ul className="max-h-64 overflow-y-auto py-1">
               {filtered.length === 0 ? (
-                <li className="px-4 py-3 text-sm text-gray-400 text-center">Aucun pays trouvé</li>
+                <li className="px-4 py-3 text-sm text-gray-400 text-center">{t.profile.passNotFound}</li>
               ) : filtered.map((c) => (
                 <li key={c.code}>
                   <button
@@ -155,22 +156,23 @@ function PassportCombobox({
 function ConfirmDialog({
   open, onConfirm, onCancel, country,
 }: { open: boolean; onConfirm: () => void; onCancel: () => void; country: string }) {
+  const { t } = useLang();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-        <p className="text-lg font-semibold text-gray-900">Supprimer ce passeport ?</p>
+        <p className="text-lg font-semibold text-gray-900">{t.profile.passDeleteConfirm}</p>
         <p className="mt-2 text-sm text-gray-500">
-          Le passeport <span className="font-medium text-gray-800">{country}</span> sera retiré de ton profil. Cette action est réversible.
+          {t.profile.passDeleteDesc.replace("{country}", country)}
         </p>
         <div className="mt-5 flex gap-3">
           <button onClick={onCancel}
             className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-            Annuler
+            {t.common.cancel}
           </button>
           <button onClick={onConfirm}
             className="flex-1 rounded-xl bg-red-500 py-2.5 text-sm font-medium text-white hover:bg-red-600 transition">
-            Supprimer
+            {t.common.delete}
           </button>
         </div>
       </div>
@@ -193,12 +195,13 @@ function SectionCard({ title, icon, children }: { title: string; icon: string; c
 }
 
 function ComingSoonField({ label, placeholder }: { label: string; placeholder: string }) {
+  const { t } = useLang();
   return (
     <div>
       <label className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</label>
       <div className="mt-1.5 flex items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
         <span className="text-sm text-gray-400 italic">{placeholder}</span>
-        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">Bientôt</span>
+        <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">{t.common.comingSoon}</span>
       </div>
     </div>
   );
@@ -210,6 +213,7 @@ export default function ProfilePage() {
   const router = useRouter();
   const toast  = useToast();
   const { t, lang, setLang } = useLang();
+  const locale = lang === "fr" ? "fr-FR" : "en-GB";
 
   const [user,    setUser]    = useState<User | null>(null);
   const [role,    setRoleState] = useState<"UNIVERSITY" | "STUDENT" | null>(null);
@@ -312,7 +316,7 @@ export default function ProfilePage() {
     // Duplicate already blocked by isDuplicate disabling the button,
     // but keep the guard in case of race conditions.
     if (passports.some((p) => normalizeIso2(p.countryCode) === code)) {
-      setAddError("Ce passeport est déjà dans ta liste.");
+      setAddError(t.profile.passDuplicate);
       return;
     }
     setAddError(null);
@@ -329,7 +333,7 @@ export default function ProfilePage() {
       }
       // Reload from server to guarantee the state matches the DB
       await loadPassports();
-      toast.ok("Passeport ajouté !");
+      toast.ok(t.profile.passAdded);
       // Reset selection to first country not already in list
       const next = countries.find(
         (c) => !passports.some((p) => normalizeIso2(p.countryCode) === c.code) && c.code !== code
@@ -339,7 +343,7 @@ export default function ProfilePage() {
       const msg = e?.message ?? "Erreur lors de l'ajout";
       // Show inline for duplicate/conflict errors, toast for unexpected errors
       if (msg.toLowerCase().includes("exist") || msg.toLowerCase().includes("déjà") || msg.toLowerCase().includes("conflict")) {
-        setAddError("Ce passeport est déjà dans ta liste.");
+        setAddError(t.profile.passDuplicate);
       } else {
         toast.err(msg);
       }
@@ -362,7 +366,7 @@ export default function ProfilePage() {
       }
       // Reload to confirm the DB state
       await loadPassports();
-      toast.ok("Passeport supprimé.");
+      toast.ok(t.profile.passDeleted);
     } catch (e: any) {
       // On error, reload to restore the real server state
       await loadPassports();
@@ -466,48 +470,46 @@ export default function ProfilePage() {
       {isUniversity ? (
         <>
           {/* Informations établissement */}
-          <SectionCard title="Informations de l'établissement" icon="🏛️">
+          <SectionCard title={t.profile.univInfoTitle} icon="🏛️">
             <div className="space-y-4">
-              <ComingSoonField label="Nom de l'établissement" placeholder="Ex : Université Paris-Saclay" />
-              <ComingSoonField label="Pays" placeholder="Ex : France" />
-              <ComingSoonField label="Site web" placeholder="Ex : https://universite.fr" />
-              <ComingSoonField label="Numéro SIRET / identifiant" placeholder="Ex : 12345678900012" />
+              <ComingSoonField label={t.profile.univInfoName} placeholder={t.profile.univInfoNameEx} />
+              <ComingSoonField label={t.profile.univInfoCountry} placeholder={t.profile.univInfoCountryEx} />
+              <ComingSoonField label={t.profile.univInfoWebsite} placeholder={t.profile.univInfoWebsiteEx} />
+              <ComingSoonField label={t.profile.univInfoId} placeholder={t.profile.univInfoIdEx} />
             </div>
           </SectionCard>
 
           {/* Contact */}
-          <SectionCard title="Contact responsable mobilité" icon="📬">
+          <SectionCard title={t.profile.univContactTitle} icon="📬">
             <div className="space-y-4">
-              <ComingSoonField label="Nom du responsable" placeholder="Ex : Marie Dupont" />
-              <ComingSoonField label="Téléphone" placeholder="Ex : +33 1 23 45 67 89" />
+              <ComingSoonField label={t.profile.univContactName} placeholder={t.profile.univContactNameEx} />
+              <ComingSoonField label={t.profile.univContactPhone} placeholder={t.profile.univContactPhoneEx} />
             </div>
           </SectionCard>
 
           {/* Programmes */}
-          <SectionCard title="Programmes & partenaires" icon="🌍">
+          <SectionCard title={t.profile.univProgsTitle} icon="🌍">
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
               <p className="text-3xl">🚧</p>
-              <p className="mt-2 font-semibold text-gray-700">Fonctionnalité en développement</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Gérez vos universités partenaires, programmes Erasmus+ et accords bilatéraux directement ici.
-              </p>
+              <p className="mt-2 font-semibold text-gray-700">{t.profile.univProgsDev}</p>
+              <p className="mt-1 text-sm text-gray-500">{t.profile.univProgsDesc}</p>
             </div>
           </SectionCard>
 
           {/* Notifications */}
-          <SectionCard title="Notifications" icon="🔔">
+          <SectionCard title={t.profile.univNotifTitle} icon="🔔">
             <div className="space-y-3">
-              {[
-                { label: "Alertes documents expirés", desc: "Notifier quand un document étudiant expire" },
-                { label: "Rappels de conformité", desc: "Résumé hebdomadaire du taux de conformité" },
-                { label: "Nouveaux étudiants", desc: "Notifier à l'arrivée d'un nouvel étudiant" },
-              ].map((n) => (
+              {([
+                { label: t.profile.univNotif1Label, desc: t.profile.univNotif1Desc },
+                { label: t.profile.univNotif2Label, desc: t.profile.univNotif2Desc },
+                { label: t.profile.univNotif3Label, desc: t.profile.univNotif3Desc },
+              ] as const).map((n) => (
                 <div key={n.label} className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 opacity-60">
                   <div>
                     <p className="text-sm font-medium text-gray-700">{n.label}</p>
                     <p className="text-xs text-gray-400">{n.desc}</p>
                   </div>
-                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">Bientôt</span>
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">{t.common.comingSoon}</span>
                 </div>
               ))}
             </div>
@@ -516,9 +518,9 @@ export default function ProfilePage() {
       ) : (
         <>
           {/* Passeports */}
-          <SectionCard title="Mes passeports" icon="🛂">
+          <SectionCard title={t.profile.passSection} icon="🛂">
             <p className="mb-5 text-sm text-gray-500 leading-relaxed">
-              Ajoute tous les passeports que tu possèdes. StudyComply les utilise pour calculer les documents et visas dont tu as besoin selon ta destination.
+              {t.profile.passDescFull}
             </p>
 
             {/* Add passport */}
@@ -530,7 +532,7 @@ export default function ProfilePage() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <div className="flex-1">
                       <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-400">
-                        Nationalité du passeport
+                        {t.profile.passNationality}
                       </label>
                       <PassportCombobox
                         countries={countries}
@@ -544,13 +546,13 @@ export default function ProfilePage() {
                       className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition sm:self-auto self-stretch"
                     >
                       {adding ? (
-                        <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> Ajout…</>
+                        <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> {t.profile.passAdding}</>
                       ) : isDuplicate ? (
-                        <>✓ Déjà dans ta liste</>
+                        <>{t.profile.passAddedAlready}</>
                       ) : (
                         <><svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                        </svg> Ajouter</>
+                        </svg> {t.profile.passAddBtn}</>
                       )}
                     </button>
                   </div>
@@ -560,7 +562,7 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                       <span className="text-base leading-none">⚠️</span>
                       <p className="text-xs font-medium text-amber-700">
-                        {flagEmoji(selectedCode)} {countryName(selectedCode)} est déjà dans ta liste de passeports.
+                        {flagEmoji(selectedCode)} {t.profile.passAlreadyIn.replace("{country}", countryName(selectedCode))}
                       </p>
                     </div>
                   )}
@@ -580,8 +582,8 @@ export default function ProfilePage() {
             {passports.length === 0 ? (
               <div className="mt-5 rounded-2xl border border-dashed border-gray-200 bg-gray-50 py-8 text-center">
                 <p className="text-3xl">🛂</p>
-                <p className="mt-2 text-sm font-medium text-gray-500">Aucun passeport ajouté</p>
-                <p className="mt-1 text-xs text-gray-400">Ajoute ton premier passeport ci-dessus</p>
+                <p className="mt-2 text-sm font-medium text-gray-500">{t.profile.passEmptyTitle}</p>
+                <p className="mt-1 text-xs text-gray-400">{t.profile.passEmptyDesc}</p>
               </div>
             ) : (
               <ul className="mt-5 space-y-2">
@@ -605,11 +607,11 @@ export default function ProfilePage() {
                           </p>
                           {isSelected && (
                             <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600">
-                              Sélectionné
+                              {t.profile.passSelected}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400">Ajouté le {fmtDate(p.createdAt)}</p>
+                        <p className="text-xs text-gray-400">{t.profile.passAddedOn} {fmtDate(p.createdAt, locale)}</p>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); setConfirmCode(p.countryCode); }}
@@ -618,7 +620,7 @@ export default function ProfilePage() {
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        Supprimer
+                        {t.common.delete}
                       </button>
                     </li>
                   );
@@ -628,27 +630,27 @@ export default function ProfilePage() {
           </SectionCard>
 
           {/* Infos personnelles */}
-          <SectionCard title="Informations personnelles" icon="📝">
+          <SectionCard title={t.profile.personalTitle} icon="📝">
             <div className="space-y-4">
-              <ComingSoonField label="Prénom & nom" placeholder="Ex : Jean Dupont" />
-              <ComingSoonField label="Date de naissance" placeholder="Ex : 01/01/2000" />
-              <ComingSoonField label="Université d'origine" placeholder="Ex : Université de Bordeaux" />
+              <ComingSoonField label={t.profile.personalName} placeholder={t.profile.personalNameEx} />
+              <ComingSoonField label={t.profile.personalDob} placeholder={t.profile.personalDobEx} />
+              <ComingSoonField label={t.profile.personalUniv} placeholder={t.profile.personalUnivEx} />
             </div>
           </SectionCard>
 
           {/* Notifications */}
-          <SectionCard title="Notifications" icon="🔔">
+          <SectionCard title={t.profile.univNotifTitle} icon="🔔">
             <div className="space-y-3">
-              {[
-                { label: "Expiration de documents", desc: "Rappel 60 jours avant l'expiration" },
-                { label: "Nouvelles exigences", desc: "Alerte si les règles de ta destination changent" },
-              ].map((n) => (
+              {([
+                { label: t.profile.studNotif1Label, desc: t.profile.studNotif1Desc },
+                { label: t.profile.studNotif2Label, desc: t.profile.studNotif2Desc },
+              ] as const).map((n) => (
                 <div key={n.label} className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 opacity-60">
                   <div>
                     <p className="text-sm font-medium text-gray-700">{n.label}</p>
                     <p className="text-xs text-gray-400">{n.desc}</p>
                   </div>
-                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">Bientôt</span>
+                  <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">{t.common.comingSoon}</span>
                 </div>
               ))}
             </div>

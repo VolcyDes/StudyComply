@@ -21,11 +21,44 @@ type Country  = { code: string; name: string };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PURPOSE_LABELS: Record<string, string> = {
-  exchange: "Échange universitaire", internship: "Stage",
-  degree: "Diplôme", phd: "Doctorat", language: "Cours de langue",
-};
-const PURPOSES = Object.entries(PURPOSE_LABELS);
+type StudentT = typeof import("../../../lib/i18n").TRANSLATIONS.fr.student;
+
+function getPurposeLabels(ts: StudentT): Record<string, string> {
+  return {
+    exchange:   ts.purposeExchange,
+    internship: ts.purposeInternship,
+    degree:     ts.purposeDegree,
+    phd:        ts.purposePhd,
+    language:   ts.purposeLanguage,
+  };
+}
+
+function getDocTypeLabels(ts: StudentT): Record<string, string> {
+  return {
+    passport:         ts.docPassport,
+    visa:             ts.docVisa,
+    insurance:        ts.docInsurance,
+    acceptance:       ts.docAcceptance,
+    transcript:       ts.docTranscript,
+    accommodation:    ts.docAccommodation,
+    funds:            ts.docFunds,
+    photos:           ts.docPhotos,
+    appointment:      ts.docAppointment,
+    residence_permit: ts.docResidencePermit,
+    bank:             ts.docBank,
+    enrollment:       ts.docEnrollment,
+    registration:     ts.docRegistration,
+    i20:              ts.docI20,
+    sevis_fee:        ts.docSevisFee,
+    ds160:            ts.docDs160,
+    eta:              ts.docEta,
+    pal:              ts.docPal,
+    ssn:              ts.docSsn,
+    sin:              ts.docSin,
+    oshc:             ts.docOshc,
+    other:            ts.docOther,
+  };
+}
 
 const FLAGS: Record<string, string> = {
   FR:"🇫🇷",DE:"🇩🇪",ES:"🇪🇸",IT:"🇮🇹",GB:"🇬🇧",US:"🇺🇸",CA:"🇨🇦",NL:"🇳🇱",
@@ -36,14 +69,6 @@ const FLAGS: Record<string, string> = {
   LU:"🇱🇺",IS:"🇮🇸",EE:"🇪🇪",LV:"🇱🇻",LT:"🇱🇹",SK:"🇸🇰",SI:"🇸🇮",HR:"🇭🇷",
 };
 
-const DOC_TYPE_LABELS: Record<string, string> = {
-  passport:"🛂 Passeport", visa:"📋 Visa", insurance:"🏥 Assurance",
-  acceptance:"🎓 Acceptation", transcript:"📄 Relevé", accommodation:"🏠 Logement",
-  funds:"💰 Ressources", photos:"📸 Photos", appointment:"📅 Rendez-vous",
-  residence_permit:"📇 Titre de séjour", bank:"🏦 Banque",
-  enrollment:"✏️ Inscription", registration:"🏛️ Enregistrement", other:"📎 Autre",
-};
-
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
 async function safeJson(res: Response) {
@@ -52,7 +77,7 @@ async function safeJson(res: Response) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-function fmtDate(iso: string, locale = "fr-FR") {
+function fmtDate(iso: string, locale = "en-GB") {
   return new Date(iso).toLocaleDateString(locale, { month: "short", year: "numeric" });
 }
 function fmtDateInput(iso: string) {
@@ -73,9 +98,7 @@ function fmtBytes(n: number) {
 
 // ─── Next Step ────────────────────────────────────────────────────────────────
 
-type StudentT = typeof import("../../../lib/i18n").TRANSLATIONS.fr.student;
-
-function computeNextStep(project: Project | null, passports: Passport[], documents: Document[], ts: StudentT) {
+function computeNextStep(project: Project | null, passports: Passport[], documents: Document[], ts: StudentT, locale = "fr-FR") {
   if (!project) return {
     icon:"🗺️", title: ts.nextProjectTitle, desc: ts.nextProjectDesc,
     cta: ts.nextProjectCta, action:"project" as const,
@@ -95,7 +118,7 @@ function computeNextStep(project: Project | null, passports: Passport[], documen
   const expiring = documents.find((d) => d.fileName && isExpiringSoon(d.expiresAt));
   if (expiring) return {
     icon:"⏳", title:`${expiring.title}`,
-    desc:`${ts.expiry} ${fmtDate(expiring.expiresAt)}.`,
+    desc:`${ts.expiry} ${fmtDate(expiring.expiresAt, locale)}.`,
     cta: ts.nextCheckCta, action:"scroll-docs" as const,
     color:"from-amber-500 to-yellow-600",
   };
@@ -111,6 +134,10 @@ function computeNextStep(project: Project | null, passports: Passport[], documen
 export default function StudentDashboardPage() {
   const router = useRouter();
   const { t, lang } = useLang();
+  const locale       = lang === "fr" ? "fr-FR" : "en-GB";
+  const PURPOSE_LABELS = getPurposeLabels(t.student);
+  const DOC_TYPE_LABELS = getDocTypeLabels(t.student);
+  const PURPOSES = Object.entries(PURPOSE_LABELS);
 
   const [user,      setUser]      = useState<User | null>(null);
   const [project,   setProject]   = useState<Project | null>(null);
@@ -385,7 +412,7 @@ export default function StudentDashboardPage() {
     </div>
   );
 
-  const nextStep     = computeNextStep(project, passports, documents, t.student);
+  const nextStep     = computeNextStep(project, passports, documents, t.student, locale);
   const docsWithFile = documents.filter((d) => d.fileName);
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -407,7 +434,7 @@ export default function StudentDashboardPage() {
             </h1>
             <p className="mt-1 text-indigo-200 text-sm">
               {project
-                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate, lang === "en" ? "en-GB" : "fr-FR")} → ${fmtDate(project.endDate, lang === "en" ? "en-GB" : "fr-FR")}`
+                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate, locale)} → ${fmtDate(project.endDate, locale)}`
                 : t.student.checklistEmpty}
             </p>
           </div>
@@ -431,7 +458,7 @@ export default function StudentDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard icon="🗺️" label={t.student.statDest}
           value={project ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)}` : t.common.na}
-          sub={project ? `${fmtDate(project.startDate, lang === "en" ? "en-GB" : "fr-FR")} → ${fmtDate(project.endDate, lang === "en" ? "en-GB" : "fr-FR")}` : t.student.noDest}
+          sub={project ? `${fmtDate(project.startDate, locale)} → ${fmtDate(project.endDate, locale)}` : t.student.noDest}
           color="bg-indigo-50 border-indigo-100" iconBg="bg-indigo-100" />
         <StatCard icon="📄" label={t.student.statCompliance}
           value={checklist.length > 0 ? `${summary.score}%` : `${docsWithFile.length} ${docsWithFile.length > 1 ? t.student.docsDepositedPl : t.student.docsDeposited}`}
@@ -943,6 +970,7 @@ function ChecklistRow({ item, isLast, onAddDoc }: {
 
 function TimelineView({ checklist, documents, lang }: { checklist: ChecklistItem[]; documents: Document[]; lang: string }) {
   const { t } = useLang();
+  const locale = lang === "fr" ? "fr-FR" : "en-GB";
 
   // Build timeline events from checklist items + document expiry dates
   type Event = { date: string; label: string; icon: string; badge: string; badgeText: string };
@@ -974,7 +1002,7 @@ function TimelineView({ checklist, documents, lang }: { checklist: ChecklistItem
     const expired  = isExpired(doc.expiresAt);
     const expiring = isExpiringSoon(doc.expiresAt);
     events.push({
-      date: fmtDate(doc.expiresAt, lang === "en" ? "en-GB" : "fr-FR"),
+      date: fmtDate(doc.expiresAt, locale),
       label: doc.title,
       icon: "📄",
       badge: expired ? "bg-red-100 text-red-700" : expiring ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500",
@@ -1024,7 +1052,9 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
   onDownload:   () => void;
   onDelete: () => void;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const locale = lang === "fr" ? "fr-FR" : "en-GB";
+  const docTypeLabels = getDocTypeLabels(t.student);
   const expired  = isExpired(doc.expiresAt);
   const expiring = isExpiringSoon(doc.expiresAt);
   const isUploading = uploadStatus === "uploading";
@@ -1035,7 +1065,7 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-semibold text-gray-900">{doc.title}</p>
-          <p className="mt-0.5 text-xs text-gray-400">{DOC_TYPE_LABELS[doc.type] ?? doc.type}</p>
+          <p className="mt-0.5 text-xs text-gray-400">{docTypeLabels[doc.type] ?? doc.type}</p>
         </div>
         <button onClick={onDelete}
           className="shrink-0 rounded-lg p-1 text-gray-300 hover:bg-red-50 hover:text-red-500 transition">
@@ -1045,7 +1075,7 @@ function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, 
 
       {/* Expiry */}
       <p className={`mt-3 text-xs font-medium ${expired ? "text-red-600" : expiring ? "text-amber-600" : "text-gray-400"}`}>
-        {expired ? t.student.expired : expiring ? t.student.expiringSoon : t.student.valid} · {fmtDate(doc.expiresAt)}
+        {expired ? t.student.expired : expiring ? t.student.expiringSoon : t.student.valid} · {fmtDate(doc.expiresAt, locale)}
       </p>
 
       {/* File section */}
