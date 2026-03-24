@@ -143,6 +143,8 @@ export default function StudentDashboardPage() {
   const [project,   setProject]   = useState<Project | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [passports, setPassports] = useState<Passport[]>([]);
+  // Which passport the student wants to use for checklist generation
+  const [selectedPassportCode, setSelectedPassportCode] = useState<string | null>(null);
   // Supported destination countries (static list filtered to supported zones)
   const supportedCountries = ALL_COUNTRIES.filter((c) => SUPPORTED_DESTINATION_CODES.has(c.code));
 
@@ -354,16 +356,6 @@ export default function StudentDashboardPage() {
     () => new Set(documents.filter((d) => d.fileName).map((d) => d.type)),
     [documents],
   );
-  const checklist = useMemo(
-    () => project && passports.length > 0
-      ? buildChecklist(
-          { passportCodes: passports.map((p) => p.countryCode), destinationCountry: project.destinationCountry, startDate: project.startDate, endDate: project.endDate },
-          doneDocTypes,
-        )
-      : [],
-    [project, passports, doneDocTypes],
-  );
-  const summary = useMemo(() => summarise(checklist), [checklist]);
 
   // ── Passport advice (only when multiple passports) ──
   const passportAdvice = useMemo<PassportAdvice | null>(
@@ -377,6 +369,24 @@ export default function StudentDashboardPage() {
       : null,
     [project, passports],
   );
+
+  // Derive the active passport: explicit selection > recommended > first
+  const activePassportCode = (
+    (selectedPassportCode && passports.some((p) => p.countryCode === selectedPassportCode))
+      ? selectedPassportCode
+      : passportAdvice?.recommendedCode ?? passports[0]?.countryCode ?? null
+  );
+
+  const checklist = useMemo(
+    () => project && activePassportCode
+      ? buildChecklist(
+          { passportCodes: [activePassportCode], destinationCountry: project.destinationCountry, startDate: project.startDate, endDate: project.endDate },
+          doneDocTypes,
+        )
+      : [],
+    [project, activePassportCode, doneDocTypes],
+  );
+  const summary = useMemo(() => summarise(checklist), [checklist]);
 
   // ── Filtered & sorted documents ──
   const filteredDocs = useMemo(() => {
@@ -549,28 +559,56 @@ export default function StudentDashboardPage() {
           </div>
         )}
 
-        {/* Passport advice banner */}
-        {passportAdvice && (
-          <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <span className="text-lg leading-none">🛂</span>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-800">{t.student.passportAdviceTitle}</p>
-              <p className="mt-0.5 text-xs text-amber-700">
+        {/* Passport selector — shown when student holds multiple passports */}
+        {passports.length > 1 && (
+          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              🛂 {t.student.passportAdviceTitle}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {passports.map((p) => {
+                const isActive = p.countryCode === activePassportCode;
+                const isRecommended = p.countryCode === passportAdvice?.recommendedCode;
+                const steps = passportAdvice?.rankedCodes.find((r) => r.code === p.countryCode)?.requiredCount;
+                return (
+                  <button
+                    key={p.countryCode}
+                    onClick={() => setSelectedPassportCode(p.countryCode)}
+                    className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-medium transition-all ${
+                      isActive
+                        ? "border-indigo-500 bg-indigo-600 text-white shadow-sm"
+                        : "border-gray-200 bg-gray-50 text-gray-700 hover:border-indigo-300 hover:bg-white"
+                    }`}
+                  >
+                    <span className="text-xl leading-none">{FLAGS[p.countryCode] ?? "🌐"}</span>
+                    <span>{countryName(p.countryCode)}</span>
+                    {steps !== undefined && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-500"
+                      }`}>
+                        {steps} {t.student.total}
+                      </span>
+                    )}
+                    {isRecommended && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-700"
+                      }`}>
+                        {isActive ? "✓" : t.student.passportRecommended}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {passportAdvice && (
+              <p className="mt-3 text-xs text-gray-500">
                 {t.student.passportAdviceSave
-                  .replace("{code}", `${FLAGS[passportAdvice.recommendedCode] ?? ""} ${passportAdvice.recommendedCode}`)
+                  .replace("{code}", `${FLAGS[passportAdvice.recommendedCode] ?? ""} ${countryName(passportAdvice.recommendedCode)}`)
                   .replace("{n}", String(passportAdvice.savedSteps))
                   .replace("{s}", passportAdvice.savedSteps > 1 ? "s" : "")
                   .replace("{s}", passportAdvice.savedSteps > 1 ? "s" : "")}
               </p>
-              <div className="mt-1.5 flex flex-wrap gap-2">
-                {passportAdvice.rankedCodes.map((r) => (
-                  <span key={r.code} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${r.code === passportAdvice.recommendedCode ? "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300" : "bg-white text-gray-600 ring-1 ring-gray-200"}`}>
-                    {FLAGS[r.code] ?? ""} {r.code} · {r.requiredCount} {t.student.total}
-                    {r.code === passportAdvice.recommendedCode && " ✓"}
-                  </span>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
         )}
 

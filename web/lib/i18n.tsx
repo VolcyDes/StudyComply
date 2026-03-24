@@ -135,9 +135,10 @@ export const TRANSLATIONS = {
       checklist:       "Checklist",
       noDocsFilter:    "Aucun document pour ce filtre.",
       // Passport advice
-      passportAdviceTitle: "💡 Recommandation passeport",
-      passportAdviceSave:  "Utilise ton passeport {code} — il te fait économiser {n} étape{s} obligatoire{s}.",
+      passportAdviceTitle: "Choisir un passeport",
+      passportAdviceSave:  "Le passeport {code} te fait économiser {n} étape{s} obligatoire{s}.",
       passportAdviceEqual: "Tous tes passeports mènent au même nombre de démarches.",
+      passportRecommended: "Recommandé",
       applyLink:           "→ Postuler",
       durationOnly:        "ℹ️",
       // Project modal
@@ -456,9 +457,10 @@ export const TRANSLATIONS = {
       checklist:       "Checklist",
       noDocsFilter:    "No documents for this filter.",
       // Passport advice
-      passportAdviceTitle: "💡 Passport recommendation",
-      passportAdviceSave:  "Use your {code} passport — it saves you {n} required step{s}.",
+      passportAdviceTitle: "Choose a passport",
+      passportAdviceSave:  "The {code} passport saves you {n} required step{s}.",
       passportAdviceEqual: "All your passports lead to the same number of steps.",
+      passportRecommended: "Recommended",
       applyLink:           "→ Apply",
       durationOnly:        "ℹ️",
       // Project modal
