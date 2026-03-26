@@ -668,7 +668,7 @@ export const TRANSLATIONS = {
   },
 } as const;
 
-export type Translations = typeof TRANSLATIONS.fr;
+export type Translations = typeof TRANSLATIONS.fr | typeof TRANSLATIONS.en;
 
 // ─── Context ───────────────────────────────────────────────────────────────────
 
@@ -696,7 +696,7 @@ export function LangProvider({ children }: { children: React.ReactNode }) {
   function toggleLang() { /* no-op until language switching is re-enabled */ }
 
   return (
-    <LangContext.Provider value={{ lang, t: TRANSLATIONS.en as Translations, toggleLang, setLang }}>
+    <LangContext.Provider value={{ lang, t: TRANSLATIONS.en, toggleLang, setLang }}>
       {children}
     </LangContext.Provider>
   );
