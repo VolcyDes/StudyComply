@@ -10,42 +10,42 @@ export type DestinationZone = "SCHENGEN_EU" | "USA" | "CANADA" | "UK" | "JAPAN" 
 /** Maps an ISO-2 destination country code to its zone. */
 const DESTINATION_ZONES: Record<string, DestinationZone> = {
   // ── Schengen area (full members) ──────────────────────────────────────────
-  AT: "SCHENGEN_EU", // Autriche
-  BE: "SCHENGEN_EU", // Belgique
-  CH: "SCHENGEN_EU", // Suisse
-  CZ: "SCHENGEN_EU", // Tchéquie
-  DE: "SCHENGEN_EU", // Allemagne
-  DK: "SCHENGEN_EU", // Danemark
-  EE: "SCHENGEN_EU", // Estonie
-  ES: "SCHENGEN_EU", // Espagne
-  FI: "SCHENGEN_EU", // Finlande
+  AT: "SCHENGEN_EU", // Austria
+  BE: "SCHENGEN_EU", // Belgium
+  CH: "SCHENGEN_EU", // Switzerland
+  CZ: "SCHENGEN_EU", // Czech Republic
+  DE: "SCHENGEN_EU", // Germany
+  DK: "SCHENGEN_EU", // Denmark
+  EE: "SCHENGEN_EU", // Estonia
+  ES: "SCHENGEN_EU", // Spain
+  FI: "SCHENGEN_EU", // Finland
   FR: "SCHENGEN_EU", // France
-  GR: "SCHENGEN_EU", // Grèce
-  HR: "SCHENGEN_EU", // Croatie (Schengen depuis jan. 2023)
-  HU: "SCHENGEN_EU", // Hongrie
-  IS: "SCHENGEN_EU", // Islande
-  IT: "SCHENGEN_EU", // Italie
+  GR: "SCHENGEN_EU", // Greece
+  HR: "SCHENGEN_EU", // Croatia (Schengen since Jan 2023)
+  HU: "SCHENGEN_EU", // Hungary
+  IS: "SCHENGEN_EU", // Iceland
+  IT: "SCHENGEN_EU", // Italy
   LI: "SCHENGEN_EU", // Liechtenstein
-  LT: "SCHENGEN_EU", // Lituanie
+  LT: "SCHENGEN_EU", // Lithuania
   LU: "SCHENGEN_EU", // Luxembourg
-  LV: "SCHENGEN_EU", // Lettonie
-  MT: "SCHENGEN_EU", // Malte
-  NL: "SCHENGEN_EU", // Pays-Bas
-  NO: "SCHENGEN_EU", // Norvège
-  PL: "SCHENGEN_EU", // Pologne
+  LV: "SCHENGEN_EU", // Latvia
+  MT: "SCHENGEN_EU", // Malta
+  NL: "SCHENGEN_EU", // Netherlands
+  NO: "SCHENGEN_EU", // Norway
+  PL: "SCHENGEN_EU", // Poland
   PT: "SCHENGEN_EU", // Portugal
-  RO: "SCHENGEN_EU", // Roumanie (Schengen air/mer avr. 2024)
-  SE: "SCHENGEN_EU", // Suède
-  SI: "SCHENGEN_EU", // Slovénie
-  SK: "SCHENGEN_EU", // Slovaquie
-  // ── EU hors Schengen (règles similaires pour étudiants) ──────────────────
-  BG: "SCHENGEN_EU", // Bulgarie
-  CY: "SCHENGEN_EU", // Chypre
-  IE: "SCHENGEN_EU", // Irlande
-  // ── Amérique du Nord ──────────────────────────────────────────────────────
+  RO: "SCHENGEN_EU", // Romania (Schengen air/sea Apr 2024)
+  SE: "SCHENGEN_EU", // Sweden
+  SI: "SCHENGEN_EU", // Slovenia
+  SK: "SCHENGEN_EU", // Slovakia
+  // ── EU outside Schengen (similar rules for students) ─────────────────────
+  BG: "SCHENGEN_EU", // Bulgaria
+  CY: "SCHENGEN_EU", // Cyprus
+  IE: "SCHENGEN_EU", // Ireland
+  // ── North America ─────────────────────────────────────────────────────────
   US: "USA",
   CA: "CANADA",
-  // ── Autres destinations ──────────────────────────────────────────────────
+  // ── Other destinations ────────────────────────────────────────────────────
   GB: "UK",
   JP: "JAPAN",
   AU: "AUSTRALIA",
@@ -62,19 +62,19 @@ export const SUPPORTED_DESTINATION_CODES = new Set(Object.keys(DESTINATION_ZONES
 /** Supported destinations grouped for the UI. */
 export const DESTINATION_GROUPS = [
   {
-    label: "🇪🇺 Europe (Schengen & UE)",
+    label: "🇪🇺 Europe (Schengen & EU)",
     codes: ["AT","BE","BG","CH","CY","CZ","DE","DK","EE","ES","FI","FR","GR","HR","HU","IE","IS","IT","LI","LT","LU","LV","MT","NL","NO","PL","PT","RO","SE","SI","SK"],
   },
   {
-    label: "🌎 Amérique du Nord",
+    label: "🌎 North America",
     codes: ["CA","US"],
   },
   {
-    label: "🇬🇧 Royaume-Uni",
+    label: "🇬🇧 United Kingdom",
     codes: ["GB"] as const,
   },
   {
-    label: "🌏 Asie-Pacifique",
+    label: "🌏 Asia-Pacific",
     codes: ["JP","AU"] as const,
   },
 ] as const;

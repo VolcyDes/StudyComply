@@ -9,7 +9,7 @@ import { useLang } from "../../lib/i18n";
 export default function TopNav() {
   const router   = useRouter();
   const pathname = usePathname();
-  const { t, lang, toggleLang } = useLang();
+  const { t } = useLang();
 
   const [authed,    setAuthed]    = useState(false);
   const [email,     setEmail]     = useState<string | null>(null);
@@ -72,17 +72,6 @@ export default function TopNav() {
 
         {/* Right zone */}
         <div className="flex items-center gap-2">
-
-          {/* Language toggle — always visible */}
-          <button
-            onClick={toggleLang}
-            title={lang === "fr" ? "Switch to English" : "Passer en français"}
-            className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
-          >
-            <span className={lang === "fr" ? "opacity-100" : "opacity-40"}>FR</span>
-            <span className="text-gray-300">|</span>
-            <span className={lang === "en" ? "opacity-100" : "opacity-40"}>EN</span>
-          </button>
 
           {!authed ? (
             <>

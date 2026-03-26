@@ -17,49 +17,49 @@ async function safeJson(res: Response) {
 const FEATURES = [
   {
     icon: "👥",
-    title: "Gestion des étudiants",
-    desc: "Suivez la conformité documentaire de vos étudiants en mobilité entrante et sortante.",
-    status: "Bientôt",
+    title: "Student management",
+    desc: "Track the document compliance of your incoming and outgoing mobility students.",
+    status: "Coming soon",
     color: "from-indigo-50 to-indigo-100 border-indigo-200",
     badge: "bg-indigo-100 text-indigo-700",
   },
   {
     icon: "📊",
-    title: "Tableau de bord analytique",
-    desc: "Visualisez en un coup d'œil le taux de conformité et les documents manquants.",
-    status: "Bientôt",
+    title: "Analytics dashboard",
+    desc: "Get a quick overview of compliance rates and missing documents.",
+    status: "Coming soon",
     color: "from-violet-50 to-violet-100 border-violet-200",
     badge: "bg-violet-100 text-violet-700",
   },
   {
     icon: "🔔",
-    title: "Alertes automatiques",
-    desc: "Notifiez automatiquement les étudiants dont les documents expirent bientôt.",
-    status: "Bientôt",
+    title: "Automatic alerts",
+    desc: "Automatically notify students whose documents are about to expire.",
+    status: "Coming soon",
     color: "from-amber-50 to-amber-100 border-amber-200",
     badge: "bg-amber-100 text-amber-700",
   },
   {
     icon: "📋",
-    title: "Checklists personnalisées",
-    desc: "Créez des checklists spécifiques à vos programmes et destinations partenaires.",
-    status: "Bientôt",
+    title: "Custom checklists",
+    desc: "Create checklists specific to your programmes and partner destinations.",
+    status: "Coming soon",
     color: "from-emerald-50 to-emerald-100 border-emerald-200",
     badge: "bg-emerald-100 text-emerald-700",
   },
   {
     icon: "🔗",
-    title: "Intégration SIS",
-    desc: "Connectez StudyComply à votre système d'information étudiant.",
-    status: "À venir",
+    title: "SIS integration",
+    desc: "Connect StudyComply to your student information system.",
+    status: "Planned",
     color: "from-rose-50 to-rose-100 border-rose-200",
     badge: "bg-rose-100 text-rose-700",
   },
   {
     icon: "📄",
-    title: "Export & rapports",
-    desc: "Exportez les données de conformité en PDF ou CSV pour vos rapports internes.",
-    status: "Bientôt",
+    title: "Export & reports",
+    desc: "Export compliance data as PDF or CSV for internal reporting.",
+    status: "Coming soon",
     color: "from-sky-50 to-sky-100 border-sky-200",
     badge: "bg-sky-100 text-sky-700",
   },
@@ -142,11 +142,11 @@ export default function UniversityDashboardPage() {
       <div className="flex items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-5">
         <span className="text-2xl mt-0.5">🚧</span>
         <div>
-          <p className="font-semibold text-amber-800">Espace en construction</p>
+          <p className="font-semibold text-amber-800">Space under construction</p>
           <p className="mt-1 text-sm text-amber-700 leading-relaxed">
-            Votre compte est bien créé et configuré en mode Université.
-            Nous travaillons activement sur les fonctionnalités ci-dessous.
-            Vous serez notifié dès qu'elles seront disponibles.
+            Your account is set up in University mode.
+            We are actively working on the features below.
+            You will be notified as soon as they are available.
           </p>
         </div>
       </div>
@@ -154,10 +154,10 @@ export default function UniversityDashboardPage() {
       {/* ── Stats (placeholder) ── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { icon: "👥", label: "Étudiants",   value: "—", sub: "À venir" },
-          { icon: "📋", label: "Conformité",  value: "—", sub: "À venir" },
-          { icon: "⚠️",  label: "Alertes",    value: "—", sub: "À venir" },
-          { icon: "🎓", label: "Programmes",  value: "—", sub: "À venir" },
+          { icon: "👥", label: "Students",    value: "—", sub: "Coming soon" },
+          { icon: "📋", label: "Compliance",  value: "—", sub: "Coming soon" },
+          { icon: "⚠️",  label: "Alerts",     value: "—", sub: "Coming soon" },
+          { icon: "🎓", label: "Programmes",  value: "—", sub: "Coming soon" },
         ].map((s) => (
           <div key={s.label} className="rounded-2xl border bg-white p-5 shadow-sm opacity-60">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-lg">
@@ -172,7 +172,7 @@ export default function UniversityDashboardPage() {
 
       {/* ── Features roadmap ── */}
       <section>
-        <h2 className="mb-5 text-lg font-bold text-gray-900">Fonctionnalités à venir</h2>
+        <h2 className="mb-5 text-lg font-bold text-gray-900">Upcoming features</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => (
             <div
@@ -197,16 +197,16 @@ export default function UniversityDashboardPage() {
       {/* ── Contact CTA ── */}
       <div className="overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 to-indigo-700 p-8 text-white text-center shadow-lg">
         <p className="text-2xl">💬</p>
-        <h3 className="mt-3 text-xl font-bold">Vous avez des besoins spécifiques ?</h3>
+        <h3 className="mt-3 text-xl font-bold">Have specific needs?</h3>
         <p className="mt-2 text-violet-200 text-sm max-w-md mx-auto leading-relaxed">
-          Contactez-nous pour discuter de vos besoins en gestion de mobilité étudiante.
-          Nous construisons StudyComply avec les universités, pas juste pour elles.
+          Contact us to discuss your student mobility management needs.
+          We are building StudyComply with universities, not just for them.
         </p>
         <a
           href="mailto:contact@studycomply.com"
           className="mt-5 inline-block rounded-2xl bg-white px-6 py-3 text-sm font-bold text-violet-700 shadow-md hover:scale-105 transition-transform"
         >
-          Nous contacter →
+          Contact us →
         </a>
       </div>
 
