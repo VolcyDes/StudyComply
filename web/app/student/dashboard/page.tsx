@@ -21,7 +21,9 @@ type Country  = { code: string; name: string };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-type StudentT = typeof import("../../../lib/i18n").TRANSLATIONS.fr.student;
+type StudentT =
+  | typeof import("../../../lib/i18n").TRANSLATIONS.fr.student
+  | typeof import("../../../lib/i18n").TRANSLATIONS.en.student;
 
 function getPurposeLabels(ts: StudentT): Record<string, string> {
   return {
