@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext } from "react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -680,8 +680,8 @@ type LangContextType = {
 };
 
 const LangContext = createContext<LangContextType>({
-  lang:       "fr",
-  t:          TRANSLATIONS.fr,
+  lang:       "en",
+  t:          TRANSLATIONS.en,
   toggleLang: () => {},
   setLang:    () => {},
 });
@@ -689,27 +689,14 @@ const LangContext = createContext<LangContextType>({
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Lang>("fr");
+  // Language switching is disabled for now — app is English-only.
+  const lang: Lang = "en";
 
-  // Read from localStorage on mount (client-only)
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sc_lang");
-      if (saved === "fr" || saved === "en") setLangState(saved);
-    } catch { /* ignore */ }
-  }, []);
-
-  function setLang(l: Lang) {
-    setLangState(l);
-    try { localStorage.setItem("sc_lang", l); } catch { /* ignore */ }
-  }
-
-  function toggleLang() {
-    setLang(lang === "fr" ? "en" : "fr");
-  }
+  function setLang(_l: Lang) { /* no-op until language switching is re-enabled */ }
+  function toggleLang() { /* no-op until language switching is re-enabled */ }
 
   return (
-    <LangContext.Provider value={{ lang, t: TRANSLATIONS[lang] as Translations, toggleLang, setLang }}>
+    <LangContext.Provider value={{ lang, t: TRANSLATIONS.en as Translations, toggleLang, setLang }}>
       {children}
     </LangContext.Provider>
   );

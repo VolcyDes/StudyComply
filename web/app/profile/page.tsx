@@ -212,7 +212,7 @@ function ComingSoonField({ label, placeholder }: { label: string; placeholder: s
 export default function ProfilePage() {
   const router = useRouter();
   const toast  = useToast();
-  const { t, lang, setLang } = useLang();
+  const { t, lang } = useLang();
   const locale = lang === "fr" ? "fr-FR" : "en-GB";
 
   const [user,    setUser]    = useState<User | null>(null);
@@ -428,27 +428,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Langue ── */}
-      <SectionCard title={t.profile.langSection} icon="🌐">
-        <p className="text-sm text-gray-500 mb-4">{t.profile.langDesc}</p>
-        <div className="grid grid-cols-2 gap-3">
-          {(["fr", "en"] as const).map((l) => (
-            <button key={l} type="button" onClick={() => setLang(l)}
-              className={`flex items-center justify-between gap-2 rounded-xl border-2 px-4 py-3 text-sm font-medium transition ${
-                lang === l
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 text-gray-700 hover:border-gray-300"
-              }`}>
-              <span>{l === "fr" ? t.profile.langFr : t.profile.langEn}</span>
-              {lang === l && (
-                <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  {t.profile.langActive}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </SectionCard>
+
 
       {/* ── Compte ── */}
       <SectionCard title={t.profile.accountTitle} icon="👤">

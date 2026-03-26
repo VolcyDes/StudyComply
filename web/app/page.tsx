@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useLang } from "../lib/i18n";
 
 // ─── Translations ──────────────────────────────────────────────────────────────
 
@@ -177,8 +176,7 @@ function StepCard({ n, title, desc }: { n: string; title: string; desc: string }
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const { lang, toggleLang } = useLang();
-  const t = T[lang];
+  const t = T.en;
 
   return (
     <div className="-mx-4 -mt-8 overflow-x-hidden">
@@ -189,18 +187,6 @@ export default function HomePage() {
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-violet-500/30 blur-3xl" />
           <div className="absolute -bottom-16 -left-16 h-72 w-72 rounded-full bg-indigo-400/30 blur-3xl" />
-        </div>
-
-        {/* Language toggle — top right of hero */}
-        <div className="absolute top-5 right-6 sm:right-10">
-          <button
-            onClick={toggleLang}
-            className="flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-white/20 transition"
-          >
-            <span className="opacity-40">{t.lang}</span>
-            <span className="opacity-25">|</span>
-            <span>{t.switchLang}</span>
-          </button>
         </div>
 
         <div className="relative mx-auto max-w-4xl">
@@ -337,10 +323,10 @@ export default function HomePage() {
           <p className="mt-3 text-sm text-slate-500">{t.destSub}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             {[
-              "🇫🇷 France", "🇩🇪 Allemagne", "🇪🇸 Espagne", "🇮🇹 Italie",
-              "🇳🇱 Pays-Bas", "🇧🇪 Belgique", "🇵🇹 Portugal", "🇸🇪 Suède",
-              "🇨🇭 Suisse", "🇳🇴 Norvège", "🇵🇱 Pologne", "🇨🇿 Tchéquie",
-              "🇺🇸 États-Unis", "🇨🇦 Canada",
+              "🇫🇷 France", "🇩🇪 Germany", "🇪🇸 Spain", "🇮🇹 Italy",
+              "🇳🇱 Netherlands", "🇧🇪 Belgium", "🇵🇹 Portugal", "🇸🇪 Sweden",
+              "🇨🇭 Switzerland", "🇳🇴 Norway", "🇵🇱 Poland", "🇨🇿 Czech Republic",
+              "🇺🇸 United States", "🇨🇦 Canada",
             ].map((dest) => (
               <span key={dest} className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-700 shadow-sm">
                 {dest}
