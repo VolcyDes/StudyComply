@@ -144,7 +144,14 @@ export default function StudentDashboardPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [passports, setPassports] = useState<Passport[]>([]);
   // Which passport the student wants to use for checklist generation
-  const [selectedPassportCode, setSelectedPassportCode] = useState<string | null>(null);
+  const [selectedPassportCode, setSelectedPassportCodeState] = useState<string | null>(() => {
+    try { return localStorage.getItem("sc_active_passport") ?? null; } catch { return null; }
+  });
+
+  function setSelectedPassportCode(code: string) {
+    setSelectedPassportCodeState(code);
+    try { localStorage.setItem("sc_active_passport", code); } catch { /* ignore */ }
+  }
   // Supported destination countries (static list filtered to supported zones)
   const supportedCountries = ALL_COUNTRIES.filter((c) => SUPPORTED_DESTINATION_CODES.has(c.code));
 
