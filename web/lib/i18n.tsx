@@ -166,6 +166,8 @@ export const TRANSLATIONS = {
       adding:          "Ajout…",
       deleteDocConfirm:"Supprimer ce document ?",
       deleteFileConfirm:"Supprimer le fichier PDF joint ?",
+      saveFailed:      "Échec de sauvegarde",
+      docTitleEx:      "Ex : Passeport français",
       // Next step prompts
       nextProjectTitle:"Configure ton projet",
       nextProjectDesc: "Indique ta destination et ton type de mobilité pour démarrer.",
@@ -211,6 +213,9 @@ export const TRANSLATIONS = {
       docSin:             "🪪 Numéro NAS",
       docOshc:            "🏥 Assurance OSHC",
       docOther:           "📎 Autre",
+      // Status badge
+      statusWarn:         "Attention",
+      statusMissing:      "Manquant",
     },
 
     // ── University dashboard ──
@@ -275,6 +280,8 @@ export const TRANSLATIONS = {
       passSelected:           "Sélectionné",
       passEmptyTitle:         "Aucun passeport ajouté",
       passEmptyDesc:          "Ajoute ton premier passeport ci-dessus",
+      addError:               "Erreur lors de l'ajout",
+      deleteError:            "Erreur lors de la suppression",
       // University sections
       univInfoTitle: "Informations de l'établissement",
       univContactTitle:"Contact mobilité internationale",
@@ -488,6 +495,8 @@ export const TRANSLATIONS = {
       adding:          "Adding…",
       deleteDocConfirm:"Delete this document?",
       deleteFileConfirm:"Delete the attached PDF file?",
+      saveFailed:      "Save failed",
+      docTitleEx:      "E.g. French passport",
       // Next step prompts
       nextProjectTitle:"Set up your project",
       nextProjectDesc: "Enter your destination and mobility type to get started.",
@@ -533,6 +542,9 @@ export const TRANSLATIONS = {
       docSin:             "🪪 SIN",
       docOshc:            "🏥 OSHC insurance",
       docOther:           "📎 Other",
+      // Status badge
+      statusWarn:         "Warning",
+      statusMissing:      "Missing",
     },
 
     // ── University dashboard ──
@@ -597,6 +609,8 @@ export const TRANSLATIONS = {
       passSelected:           "Selected",
       passEmptyTitle:         "No passport added",
       passEmptyDesc:          "Add your first passport above",
+      addError:               "Error while adding",
+      deleteError:            "Error while deleting",
       // University sections
       univInfoTitle: "Institution information",
       univContactTitle:"International mobility contact",

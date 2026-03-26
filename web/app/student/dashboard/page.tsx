@@ -222,7 +222,7 @@ export default function StudentDashboardPage() {
         if (docsRes.ok)     { const d = await safeJson(docsRes);     setDocuments(Array.isArray(d) ? d : []); }
         if (passportsRes.ok){ const p = await safeJson(passportsRes); setPassports(Array.isArray(p) ? p : []); }
       } catch (e: any) {
-        if (e?.message !== "Unauthorized") setError(e?.message ?? "Erreur de chargement");
+        if (e?.message !== "Unauthorized") setError(e?.message ?? t.common.error);
       } finally { setLoading(false); }
     }
     load();
@@ -266,7 +266,7 @@ export default function StudentDashboardPage() {
       setProject(data);
       setShowProjectModal(false);
     } catch (e: any) {
-      setProjError(e?.message ?? "Échec de sauvegarde");
+      setProjError(e?.message ?? t.student.saveFailed);
     } finally { setSavingProj(false); }
   }
 
@@ -841,7 +841,7 @@ export default function StudentDashboardPage() {
             <div>
               <label className="text-sm font-medium text-gray-700">{t.student.docTitle}</label>
               <input className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
-                placeholder="Ex: Passeport français"
+                placeholder={t.student.docTitleEx}
                 value={newDoc.title}
                 onChange={(e) => setNewDoc({ ...newDoc, title: e.target.value })} />
             </div>
@@ -895,10 +895,11 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 }
 
 function Spinner() {
+  const { t } = useLang();
   return (
     <span className="flex items-center justify-center gap-2">
       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-      Chargement…
+      {t.common.loading}
     </span>
   );
 }
@@ -1083,9 +1084,10 @@ function TimelineView({ checklist, documents, lang }: { checklist: ChecklistItem
 }
 
 function StatusBadge({ status }: { status: "ok" | "warn" | "missing" }) {
+  const { t } = useLang();
   if (status === "ok") return <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />OK</span>;
-  if (status === "warn") return <span className="flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />Attention</span>;
-  return <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400" />Manquant</span>;
+  if (status === "warn") return <span className="flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700"><span className="h-1.5 w-1.5 rounded-full bg-amber-500" />{t.student.statusWarn}</span>;
+  return <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500"><span className="h-1.5 w-1.5 rounded-full bg-gray-400" />{t.student.statusMissing}</span>;
 }
 
 function DocCard({ doc, uploadStatus, fileInputRef, onFileChange, onRemoveFile, onDownload, onDelete }: {

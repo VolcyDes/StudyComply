@@ -283,7 +283,7 @@ export default function ProfilePage() {
       const res = await authFetch("/api/v1/passports");
       if (!res.ok) {
         const msg = await res.text().catch(() => "");
-        throw new Error(msg || `Erreur ${res.status}`);
+        throw new Error(msg || `${t.common.error} (${res.status})`);
       }
       const raw  = await res.text();
       const data = raw ? JSON.parse(raw) : [];
@@ -297,7 +297,7 @@ export default function ProfilePage() {
     } catch (e: any) {
       // Only show a toast for non-auth errors (auth errors redirect to login)
       if (e?.message !== "Unauthorized" && e?.message !== "No token") {
-        toast.err(`Erreur de chargement : ${e?.message ?? "inconnue"}`);
+        toast.err(`${t.common.error}: ${e?.message ?? "—"}`);
       }
     }
   }
@@ -330,7 +330,7 @@ export default function ProfilePage() {
       });
       if (!res.ok) {
         const raw = await res.text().catch(() => "");
-        throw new Error(parseApiError(raw) || `Erreur ${res.status}`);
+        throw new Error(parseApiError(raw) || `${t.common.error} (${res.status})`);
       }
       // Reload from server to guarantee the state matches the DB
       await loadPassports();
@@ -341,7 +341,7 @@ export default function ProfilePage() {
       );
       if (next) setSelectedCode(next.code);
     } catch (e: any) {
-      const msg = e?.message ?? "Erreur lors de l'ajout";
+      const msg = e?.message ?? t.profile.addError;
       // Show inline for duplicate/conflict errors, toast for unexpected errors
       if (msg.toLowerCase().includes("exist") || msg.toLowerCase().includes("déjà") || msg.toLowerCase().includes("conflict")) {
         setAddError(t.profile.passDuplicate);
@@ -363,7 +363,7 @@ export default function ProfilePage() {
       const res = await authFetch(`/api/v1/passports/${code}`, { method: "DELETE" });
       if (!res.ok) {
         const msg = await res.text().catch(() => "");
-        throw new Error(msg || `Erreur ${res.status}`);
+        throw new Error(msg || `${t.common.error} (${res.status})`);
       }
       // Reload to confirm the DB state
       await loadPassports();
@@ -371,7 +371,7 @@ export default function ProfilePage() {
     } catch (e: any) {
       // On error, reload to restore the real server state
       await loadPassports();
-      toast.err(e?.message ?? "Erreur lors de la suppression");
+      toast.err(e?.message ?? t.profile.deleteError);
     }
   }
 
