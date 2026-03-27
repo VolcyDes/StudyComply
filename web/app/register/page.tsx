@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
-import { setRole as saveRole } from "../../lib/auth";
+import { setRole as saveRole, setAuthCookie } from "../../lib/auth";
 import { useLang } from "../../lib/i18n";
 
 type Role = "STUDENT" | "UNIVERSITY";
@@ -36,6 +36,7 @@ export default function RegisterPage() {
       if (data?.token) localStorage.setItem("token", data.token);
       if (data?.user) localStorage.setItem("user", JSON.stringify(data.user));
       saveRole(data?.user?.role ?? role);
+      setAuthCookie();
       router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? t.register.errorFallback);

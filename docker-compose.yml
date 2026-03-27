@@ -1,6 +1,8 @@
 services:
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────────
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: studycomply_db
     environment:
       POSTGRES_USER: studycomply
@@ -10,6 +12,51 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studycomply"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── NestJS API ────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: studycomply_api
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://studycomply:studycomply@db:5432/studycomply
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # Optional S3 file storage (leave unset to use local disk)
+      # S3_BUCKET: ${S3_BUCKET}
+      # S3_REGION: ${S3_REGION:-eu-west-3}
+      # S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      # S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - api_uploads:/app/uploads
+
+  # ── Next.js web ───────────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000}
+    container_name: studycomply_web
+    ports:
+      - "3001:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:3000}
+    depends_on:
+      - api
 
 volumes:
   db_data:
+  api_uploads:

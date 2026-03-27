@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { API_BASE_URL } from "../../lib/config";
-import { setRole, getRole } from "../../lib/auth";
+import { setRole, getRole, setAuthCookie } from "../../lib/auth";
 import { useLang } from "../../lib/i18n";
 
 export default function LoginPage() {
@@ -34,6 +34,7 @@ export default function LoginPage() {
       if (data?.user)  localStorage.setItem("user", JSON.stringify(data.user));
       if (data?.user?.role) setRole(data.user.role);
       else { const existing = getRole(); if (existing) setRole(existing); }
+      setAuthCookie();
       router.replace("/dashboard");
     } catch (e: any) {
       setError(e?.message ?? t.login.errorFallback);

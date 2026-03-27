@@ -69,11 +69,23 @@ export function setRole(role: string): void {
   } catch { /* ignore */ }
 }
 
+/**
+ * Sets a short-lived cookie used by the Next.js middleware to redirect
+ * unauthenticated users before the page renders. Not a security boundary —
+ * the real auth is the JWT guard on the API.
+ */
+export function setAuthCookie(): void {
+  try {
+    document.cookie = "sc_authed=1; path=/; max-age=604800; SameSite=Lax";
+  } catch { /* ignore */ }
+}
+
 /** Clears all auth data — call this at logout. */
 export function clearAuth(): void {
   try {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("userRole");
+    document.cookie = "sc_authed=; path=/; max-age=0; SameSite=Lax";
   } catch { /* ignore */ }
 }
