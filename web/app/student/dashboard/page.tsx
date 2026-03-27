@@ -434,6 +434,22 @@ export default function StudentDashboardPage() {
   const nextStep     = computeNextStep(project, passports, documents, t.student, locale);
   const docsWithFile = documents.filter((d) => d.fileName);
 
+  // ── Deadline alerts computed from loaded docs ──
+  const deadlineAlerts = useMemo(() => {
+    const alerts: { id: string; title: string; subtitle: string; level: "critical" | "warning" }[] = [];
+    for (const doc of documents) {
+      const days = Math.floor((new Date(doc.expiresAt).getTime() - Date.now()) / 86_400_000);
+      if (days < 0) {
+        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} ago` });
+      } else if (days <= 7) {
+        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: days === 0 ? "Expires today!" : `Expires in ${days} day${days !== 1 ? "s" : ""}` });
+      } else if (days <= 30) {
+        alerts.push({ id: doc.id, level: "warning", title: doc.title, subtitle: `Expires in ${days} days` });
+      }
+    }
+    return alerts.sort((a, b) => (a.level === "critical" ? -1 : 1) - (b.level === "critical" ? -1 : 1));
+  }, [documents]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -472,6 +488,59 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Deadline alerts banner ── */}
+      {deadlineAlerts.length > 0 && (
+        <div className={`overflow-hidden rounded-2xl border ${
+          deadlineAlerts.some((a) => a.level === "critical")
+            ? "border-red-200 bg-red-50"
+            : "border-amber-200 bg-amber-50"
+        }`}>
+          <div className={`flex items-center gap-3 px-5 py-3 ${
+            deadlineAlerts.some((a) => a.level === "critical") ? "bg-red-100/60" : "bg-amber-100/60"
+          }`}>
+            <span className="text-lg">{deadlineAlerts.some((a) => a.level === "critical") ? "🔴" : "⚠️"}</span>
+            <p className={`text-sm font-bold ${
+              deadlineAlerts.some((a) => a.level === "critical") ? "text-red-800" : "text-amber-800"
+            }`}>
+              {deadlineAlerts.length === 1
+                ? "1 document needs your attention"
+                : `${deadlineAlerts.length} documents need your attention`}
+            </p>
+          </div>
+          <ul className="divide-y divide-red-100/50 px-5 py-2">
+            {deadlineAlerts.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-4 py-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
+                    a.level === "critical" ? "bg-red-500" : "bg-amber-500"
+                  }`}>
+                    {a.level === "critical" ? "!" : "~"}
+                  </span>
+                  <span className="truncate text-sm font-medium text-gray-800">{a.title}</span>
+                </div>
+                <span className={`shrink-0 text-xs font-semibold ${
+                  a.level === "critical" ? "text-red-600" : "text-amber-600"
+                }`}>{a.subtitle}</span>
+              </li>
+            ))}
+          </ul>
+          <div className={`border-t px-5 py-2.5 ${
+            deadlineAlerts.some((a) => a.level === "critical") ? "border-red-200" : "border-amber-200"
+          }`}>
+            <button
+              onClick={() => document.getElementById("docs-section")?.scrollIntoView({ behavior: "smooth" })}
+              className={`text-xs font-semibold transition ${
+                deadlineAlerts.some((a) => a.level === "critical")
+                  ? "text-red-700 hover:text-red-900"
+                  : "text-amber-700 hover:text-amber-900"
+              }`}
+            >
+              Go to my documents →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -652,7 +721,7 @@ export default function StudentDashboardPage() {
       </section>
 
       {/* ── Mes documents ── */}
-      <section>
+      <section id="docs-section">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">{t.student.myDocs}</h2>
           <button onClick={() => setShowAddDoc(true)}

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearAuth, getRole, hasToken } from "../../lib/auth";
 import { useLang } from "../../lib/i18n";
+import NotificationBell from "./NotificationBell";
 
 export default function TopNav() {
   const router   = useRouter();
@@ -72,6 +73,7 @@ export default function TopNav() {
 
         {/* Right zone */}
         <div className="flex items-center gap-2">
+          {authed && !isUniversity && <NotificationBell />}
 
           {!authed ? (
             <>
