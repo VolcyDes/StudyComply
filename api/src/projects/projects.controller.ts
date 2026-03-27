@@ -17,7 +17,13 @@ export class ProjectsController {
   @Post('active')
   createActive(
     @Req() req: any,
-    @Body() body: { destinationCountry: string; purpose: string; startDate: string; endDate: string } = {} as any,
+    @Body() body: {
+      destinationCountry: string;
+      purpose: string;
+      startDate: string;
+      endDate: string;
+      hostUniversity?: string;
+    } = {} as any,
   ) {
     const dest = (body.destinationCountry || '').trim().toUpperCase();
     const purpose = (body.purpose || '').trim();
@@ -37,6 +43,7 @@ export class ProjectsController {
       purpose,
       startDate: body.startDate,
       endDate: body.endDate,
+      hostUniversity: body.hostUniversity,
     });
   }
 

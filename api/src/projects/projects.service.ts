@@ -1,6 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+const PROJECT_SELECT = {
+  id: true, destinationCountry: true, purpose: true,
+  startDate: true, endDate: true, isActive: true,
+  hostUniversity: true,
+  createdAt: true, updatedAt: true,
+};
+
 @Injectable()
 export class ProjectsService {
   constructor(private prisma: PrismaService) {}
@@ -9,16 +16,17 @@ export class ProjectsService {
     return this.prisma.mobilityProject.findFirst({
       where: { userId, isActive: true },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true, destinationCountry: true, purpose: true,
-        startDate: true, endDate: true, isActive: true,
-        createdAt: true, updatedAt: true,
-      },
+      select: PROJECT_SELECT,
     });
   }
 
-  async createActive(userId: string, input: { destinationCountry: string; purpose: string; startDate: string; endDate: string; }) {
-    // deactivate previous active projects
+  async createActive(userId: string, input: {
+    destinationCountry: string;
+    purpose: string;
+    startDate: string;
+    endDate: string;
+    hostUniversity?: string;
+  }) {
     await this.prisma.mobilityProject.updateMany({
       where: { userId, isActive: true },
       data: { isActive: false },
@@ -32,12 +40,9 @@ export class ProjectsService {
         startDate: new Date(input.startDate),
         endDate: new Date(input.endDate),
         isActive: true,
+        hostUniversity: input.hostUniversity?.trim() || null,
       },
-      select: {
-        id: true, destinationCountry: true, purpose: true,
-        startDate: true, endDate: true, isActive: true,
-        createdAt: true, updatedAt: true,
-      },
+      select: PROJECT_SELECT,
     });
   }
 

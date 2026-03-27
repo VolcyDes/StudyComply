@@ -14,7 +14,7 @@ import { useLang } from "../../../lib/i18n";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type User     = { id: string; email: string; role: string };
-type Project  = { id: string; destinationCountry: string; purpose: string; startDate: string; endDate: string; isActive: boolean };
+type Project  = { id: string; destinationCountry: string; purpose: string; startDate: string; endDate: string; isActive: boolean; hostUniversity?: string | null };
 type Document = { id: string; title: string; type: string; expiresAt: string; fileName?: string | null; fileMime?: string | null; fileSize?: number | null };
 type Passport = { id: string; countryCode: string; createdAt: string };
 type Country  = { code: string; name: string };
@@ -169,7 +169,7 @@ export default function StudentDashboardPage() {
   const [showAddDoc,       setShowAddDoc]       = useState(false);
 
   // Project form
-  const [projForm, setProjForm] = useState({ destinationCountry: "", purpose: "exchange", startDate: "", endDate: "" });
+  const [projForm, setProjForm] = useState({ destinationCountry: "", purpose: "exchange", startDate: "", endDate: "", hostUniversity: "" });
   const [savingProj, setSavingProj] = useState(false);
   const [projError,  setProjError]  = useState<string | null>(null);
   const [countryQuery, setCountryQuery] = useState("");
@@ -239,10 +239,11 @@ export default function StudentDashboardPage() {
         purpose: project.purpose,
         startDate: fmtDateInput(project.startDate),
         endDate: fmtDateInput(project.endDate),
+        hostUniversity: project.hostUniversity ?? "",
       });
       setCountryQuery(supportedCountries.find((c) => c.code === project.destinationCountry)?.name ?? project.destinationCountry);
     } else {
-      setProjForm({ destinationCountry: "", purpose: "exchange", startDate: "", endDate: "" });
+      setProjForm({ destinationCountry: "", purpose: "exchange", startDate: "", endDate: "", hostUniversity: "" });
       setCountryQuery("");
     }
     setProjError(null);
@@ -469,7 +470,7 @@ export default function StudentDashboardPage() {
             </h1>
             <p className="mt-1 text-indigo-200 text-sm">
               {project
-                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate, locale)} → ${fmtDate(project.endDate, locale)}`
+                ? `${FLAGS[project.destinationCountry] ?? "🌍"} ${countryName(project.destinationCountry)}${project.hostUniversity ? ` · 🏛️ ${project.hostUniversity}` : ""} · ${PURPOSE_LABELS[project.purpose] ?? project.purpose} · ${fmtDate(project.startDate, locale)} → ${fmtDate(project.endDate, locale)}`
                 : t.student.checklistEmpty}
             </p>
           </div>
@@ -859,6 +860,16 @@ export default function StudentDashboardPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700">Host university <span className="text-gray-400 font-normal">(optional)</span></label>
+              <input
+                className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                placeholder="E.g. University of Montreal, McGill University…"
+                value={projForm.hostUniversity}
+                onChange={(e) => setProjForm((f) => ({ ...f, hostUniversity: e.target.value }))}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

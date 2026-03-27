@@ -9,7 +9,7 @@ import { useLang } from "../../lib/i18n";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type User     = { id: string; email: string; role: string };
+type User     = { id: string; email: string; role: string; fullName?: string | null; dateOfBirth?: string | null; homeUniversity?: string | null };
 type Passport = { id: string; countryCode: string; createdAt: string };
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -227,6 +227,10 @@ export default function ProfilePage() {
   const [confirmCode,     setConfirmCode]     = useState<string | null>(null);
   const [addError,        setAddError]        = useState<string | null>(null);
 
+  // Personal info form
+  const [profileForm, setProfileForm] = useState({ fullName: "", dateOfBirth: "", homeUniversity: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+
   // ── Auth fetch ──────────────────────────────────────────────────────────────
 
   function authFetch(path: string, init?: RequestInit) {
@@ -248,10 +252,36 @@ export default function ProfilePage() {
     setRoleState(r);
 
     const stored = localStorage.getItem("user");
-    if (stored) { try { setUser(JSON.parse(stored)); } catch { /* ignore */ } }
+    if (stored) {
+      try {
+        const u = JSON.parse(stored);
+        setUser(u);
+        setProfileForm({
+          fullName: u.fullName ?? "",
+          dateOfBirth: u.dateOfBirth ? u.dateOfBirth.split("T")[0] : "",
+          homeUniversity: u.homeUniversity ?? "",
+        });
+      } catch { /* ignore */ }
+    }
 
     if (r !== "UNIVERSITY") {
-      // Student (or role not yet resolved) — load passports
+      // Student — load passports and fresh profile data in parallel
+      const token = localStorage.getItem("token");
+      if (token) {
+        fetch(`${API_BASE_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${token}` } })
+          .then((res) => res.ok ? res.json() : null)
+          .then((data) => {
+            if (data?.user) {
+              setUser(data.user);
+              setProfileForm({
+                fullName: data.user.fullName ?? "",
+                dateOfBirth: data.user.dateOfBirth ? data.user.dateOfBirth.split("T")[0] : "",
+                homeUniversity: data.user.homeUniversity ?? "",
+              });
+            }
+          })
+          .catch(() => {});
+      }
       loadPassports().finally(() => setLoading(false));
 
       // Re-fetch when the user navigates back to this page (Next.js router cache
@@ -270,7 +300,16 @@ export default function ProfilePage() {
       if (!token) { router.replace("/login"); return; }
       fetch(`${API_BASE_URL}/api/v1/me`, { headers: { Authorization: `Bearer ${token}` } })
         .then((res) => res.ok ? res.json() : null)
-        .then((data) => { if (data?.user) setUser(data.user); })
+        .then((data) => {
+          if (data?.user) {
+            setUser(data.user);
+            setProfileForm({
+              fullName: data.user.fullName ?? "",
+              dateOfBirth: data.user.dateOfBirth ? data.user.dateOfBirth.split("T")[0] : "",
+              homeUniversity: data.user.homeUniversity ?? "",
+            });
+          }
+        })
         .finally(() => setLoading(false));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -299,6 +338,28 @@ export default function ProfilePage() {
       if (e?.message !== "Unauthorized" && e?.message !== "No token") {
         toast.err(`${t.common.error}: ${e?.message ?? "—"}`);
       }
+    }
+  }
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    try {
+      const res = await authFetch("/api/v1/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profileForm),
+      });
+      if (!res.ok) throw new Error(`${t.common.error} (${res.status})`);
+      const data = await res.json();
+      if (data?.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+      toast.ok("Profile saved");
+    } catch (e: any) {
+      toast.err(e?.message ?? t.common.error);
+    } finally {
+      setSavingProfile(false);
     }
   }
 
@@ -613,9 +674,44 @@ export default function ProfilePage() {
           {/* Infos personnelles */}
           <SectionCard title={t.profile.personalTitle} icon="📝">
             <div className="space-y-4">
-              <ComingSoonField label={t.profile.personalName} placeholder={t.profile.personalNameEx} />
-              <ComingSoonField label={t.profile.personalDob} placeholder={t.profile.personalDobEx} />
-              <ComingSoonField label={t.profile.personalUniv} placeholder={t.profile.personalUnivEx} />
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-gray-400">{t.profile.personalName}</label>
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder={t.profile.personalNameEx}
+                  value={profileForm.fullName}
+                  onChange={(e) => setProfileForm((f) => ({ ...f, fullName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-gray-400">{t.profile.personalDob}</label>
+                <input
+                  type="date"
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                  value={profileForm.dateOfBirth}
+                  onChange={(e) => setProfileForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium uppercase tracking-wider text-gray-400">{t.profile.personalUniv}</label>
+                <input
+                  className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder={t.profile.personalUnivEx}
+                  value={profileForm.homeUniversity}
+                  onChange={(e) => setProfileForm((f) => ({ ...f, homeUniversity: e.target.value }))}
+                />
+              </div>
+              <button
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {savingProfile ? (
+                  <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> Saving…</>
+                ) : (
+                  <>{t.common.save}</>
+                )}
+              </button>
             </div>
           </SectionCard>
 

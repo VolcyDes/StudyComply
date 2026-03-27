@@ -13,12 +13,17 @@ enum Role {
 }
 
 model User {
-  id        String     @id @default(uuid())
-  email     String     @unique
-  password  String
-  role      Role       @default(USER)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id             String    @id @default(uuid())
+  email          String    @unique
+  password       String
+  role           Role      @default(USER)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Personal profile (optional)
+  fullName       String?
+  dateOfBirth    DateTime?
+  homeUniversity String?
 
   documents Document[]
   passports Passport[]
@@ -58,17 +63,20 @@ model Passport {
 }
 
 model MobilityProject {
-  id                String   @id @default(uuid())
+  id                 String   @id @default(uuid())
   destinationCountry String
-  purpose           String
-  startDate         DateTime
-  endDate           DateTime
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  purpose            String
+  startDate          DateTime
+  endDate            DateTime
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  userId            String
-  user              User     @relation(fields: [userId], references: [id])
+  // Host institution (optional)
+  hostUniversity     String?
+
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }
