@@ -408,6 +408,22 @@ export default function StudentDashboardPage() {
     return docs;
   }, [documents, docFilter, docSort]);
 
+  // ── Deadline alerts (must be before early returns — Rules of Hooks) ──
+  const deadlineAlerts = useMemo(() => {
+    const alerts: { id: string; title: string; subtitle: string; level: "critical" | "warning" }[] = [];
+    for (const doc of documents) {
+      const days = Math.floor((new Date(doc.expiresAt).getTime() - Date.now()) / 86_400_000);
+      if (days < 0) {
+        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} ago` });
+      } else if (days <= 7) {
+        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: days === 0 ? "Expires today!" : `Expires in ${days} day${days !== 1 ? "s" : ""}` });
+      } else if (days <= 30) {
+        alerts.push({ id: doc.id, level: "warning", title: doc.title, subtitle: `Expires in ${days} days` });
+      }
+    }
+    return alerts.sort((a, b) => (a.level === "critical" ? -1 : 1) - (b.level === "critical" ? -1 : 1));
+  }, [documents]);
+
   // ─── Loading / Error ──────────────────────────────────────────────────────
 
   if (loading) return (
@@ -433,22 +449,6 @@ export default function StudentDashboardPage() {
 
   const nextStep     = computeNextStep(project, passports, documents, t.student, locale);
   const docsWithFile = documents.filter((d) => d.fileName);
-
-  // ── Deadline alerts computed from loaded docs ──
-  const deadlineAlerts = useMemo(() => {
-    const alerts: { id: string; title: string; subtitle: string; level: "critical" | "warning" }[] = [];
-    for (const doc of documents) {
-      const days = Math.floor((new Date(doc.expiresAt).getTime() - Date.now()) / 86_400_000);
-      if (days < 0) {
-        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: `Expired ${Math.abs(days)} day${Math.abs(days) !== 1 ? "s" : ""} ago` });
-      } else if (days <= 7) {
-        alerts.push({ id: doc.id, level: "critical", title: doc.title, subtitle: days === 0 ? "Expires today!" : `Expires in ${days} day${days !== 1 ? "s" : ""}` });
-      } else if (days <= 30) {
-        alerts.push({ id: doc.id, level: "warning", title: doc.title, subtitle: `Expires in ${days} days` });
-      }
-    }
-    return alerts.sort((a, b) => (a.level === "critical" ? -1 : 1) - (b.level === "critical" ? -1 : 1));
-  }, [documents]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
